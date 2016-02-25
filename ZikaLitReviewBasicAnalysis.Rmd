@@ -1,0 +1,307 @@
+---
+title: "Zika Analysis"
+author: "Justin Lessler"
+date: "Monday, February 22, 2016"
+output: word_document
+---
+
+Pooled analysis of data form the Zika systematic review.
+
+First load the data and figure out how big our data set is for each purpose.
+
+```{r}
+zika <- read.csv("ZikaLitReviewData.csv")
+
+#How many people do we have?
+length(unique(zika$UID))
+
+#Now lets divide data sets by observation type.
+
+#Incubation period
+zika.inc <- zika[!is.na(zika$SL),]
+nrow(zika.inc)
+
+#Period of viral shedding
+zika.vshed <- zika[!is.na(zika$VL),]
+nrow(zika.vshed)
+length(unique(zika.vshed$UID))
+
+#Time to seropositiveity
+zika.sero <- zika[!is.na(zika$AL),]
+nrow(zika.sero)
+length(unique(zika.sero$UID))
+
+```
+
+So we have data with which to estimate the incubation period from 20 people; 40 observations from 17 people to estimate the length of viral shedding; and 109 observations from 21 people to estimate the time to seropositivity.
+
+
+#Incubation Period
+
+Basic incubation period analysis assuming a log-normal incubation period and using a bootstrap method for calculating confidence intervals. 
+
+```{r, results='hide'}
+library(coarseDataTools)
+
+#make the data to pass in to dic.fit
+inc.dat <- zika.inc[,c("EL","ER","SL","SR")]
+inc.dat$type <- 0
+
+#fit it...use bootstrap interstions for now. MCMC better?
+#inc.fit <- dic.fit(inc.dat,dist="L",n.boots=1000,
+#                   ptiles = c(0.05, 0.25, 0.5, 0.75, 0.95))
+
+
+inc.fit.mcmc <- dic.fit.mcmc(inc.dat, n.samples = 2000,
+                              ptiles = c(0.05, 0.25, 0.5, 0.75, 0.95))
+
+
+
+```
+
+```{r}
+plot(inc.fit.mcmc, xlim=c(0,20), plot.n.samps=2000)
+inc.fit.mcmc
+```
+
+
+We estimate the mean incubation period of Zika virus to be 5.7 days (95% CI: 3.9-7.9). The dispersion is 1.60 (95% CI: 1.31-2.42). Hence 5% of cases will develop symptoms by 2.6 days after infection (95% CI: 1.1-4.0), 25% by 4.1 days (95% CI: 2.4-5.7), 75% by 7.8 days (95% CI: 5.6-12.1) and 95% by 12.4 days (95% CI: 7.9-26.0).
+
+
+
+#Length of viral shedding
+
+```{r}
+
+#first pass, restrict to no blood
+zika.vshed.nb <- zika.vshed[which(zika.vshed$SAMPLE.TYPE %in%c("serum","blood")),]
+
+#Go through and find the start of the latest period in whihc
+#someone tested seropositive and the end of the latest subsequent
+#period where they did not....these bound seroconversion
+for (uid in unique(zika.vshed.nb$UID)) {
+  inds <- which(zika.vshed.nb$UID==uid)
+  tmp <- zika.vshed.nb[inds,] 
+  low.time <- max(tmp$VL[tmp$SHEDDING==1])
+  
+  #no earliest point...go to earliest time of infection
+  if (low.time<tmp$EL[1]) {low.time <- tmp$EL[1]}
+  
+  high.time <- min(tmp$VR[tmp$SHEDDING==0 &  tmp$VR>low.time])
+  ##print(tmp) ###DEBUG
+  ##cat(uid, low.time, high.time,"\n") ###DEBUG
+  
+  zika.vshed.nb$VCL[inds] <- low.time
+  zika.vshed.nb$VCR[inds] <- high.time
+  }
+
+
+  #make the anlytic dataset
+  vshed.nb.anal <- zika.vshed.nb[,c("UID","EL","ER","VCL","VCR")]
+  vshed.nb.anal$type <- 0
+  vshed.nb.anal <- unique(vshed.nb.anal) #one row per observation
+
+  ###REPLACED BY STAN ANALYSIS
+  #colnames(vshed.nb.anal) <- c("UID","EL","ER","SL","SR","type")
+
+  #change the infinite SRs to something really big
+  #vshed.nb.anal$SR[is.infinite(vshed.nb.anal$SR)] <- 
+  #    vshed.nb.anal$ER[is.infinite(vshed.nb.anal$SR)] + 730
+
+  #now lets fit a gamma distribution to this data using MCMC
+  #vshed.fit <- dic.fit(vshed.nb.anal, dist = "G", n.boots = 10000)
+  #vshed.fit.mcmc <- dic.fit.mcmc(vshed.nb.anal, dist = "L",
+  #                               burnin = 300,n.samples=500, optim.method="L-BFGS-B")
+
+```
+
+
+#Combined stan analysis Lognormal for all distributions
+```{r}
+require(rstan)
+
+
+#Create a dataset with everythign lined up for passing into STAN
+zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
+zika.anal <- merge(zika.anal, vshed.nb.anal, all=TRUE)
+
+zika.anal$SL[which(is.na(zika.anal$SL))] <- 
+  zika.anal$EL[which(is.na(zika.anal$SL))]
+zika.anal$SR[which(is.na(zika.anal$SR))] <- 
+   zika.anal$ER[which(is.na(zika.anal$SR))] + 100
+
+zika.anal$VCL[which(is.na(zika.anal$VCL))] <-
+  zika.anal$EL[which(is.na(zika.anal$VCL))]
+zika.anal$VCR[which(is.na(zika.anal$VCR))] <- 
+  zika.anal$ER[which(is.na(zika.anal$VCR))] + 720
+
+zika.anal$VCR[which(is.infinite(zika.anal$VCR))] <- 
+  zika.anal$ER[which(is.infinite(zika.anal$VCR))] + 720
+
+#Replace
+
+#for STAN purposes, it is usefule if all of these variables index 
+#from 0
+stan.data <- list(N=nrow(zika.anal),
+                  EL=zika.anal$EL,
+                  ER=zika.anal$ER,
+                  SL=zika.anal$SL,
+                  SR=zika.anal$SR,
+                  VL=zika.anal$VCL,
+                  VR=zika.anal$VCR)
+
+
+#initialization version for the lognormal/lognormal stan model
+stan.init.LL <- function() {
+    rc <-list(E=runif(stan.data$N, stan.data$EL, stan.data$ER),
+                lm=runif(1,log(2),log(10)),
+                lsd = runif(1,.1,2),
+                v_lm = runif(1,log(2),log(10)),
+                v_lsd = runif(1,.1,2) 
+                )
+    print(rc)
+    return(rc)
+    }
+
+
+
+#Need at least 20,000 iterations to converge
+full.fit <- stan("DistributionFitLL.stan", data=stan.data,
+                  init=stan.init.LL,
+                  iter=20000, chains=3)
+
+
+#now we need to calculate the quantiles from the chains and construct our
+#data frame
+chains <- extract(full.fit)
+
+
+inc.fit.stanLL <- c(mean(chains$lm), quantile(chains$lm,prob=c(0.025,0.975)))
+inc.fit.stanLL <- rbind(inc.fit.stanLL,
+        c(mean(chains$lsd), quantile(chains$lsd,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
+  tmp <- qlnorm(q, chains$lm, chains$lsd)
+  inc.fit.stanLL <- rbind(inc.fit.stanLL,
+                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+colnames(inc.fit.stanLL) <- c("est","CIlow","CIhigh")
+rownames(inc.fit.stanLL) <- c("meanlog",
+                            "sdlog",
+                            "p5","p25","p50","p75","p95")
+
+
+
+vshed.fit.stanLL <- c(mean(chains$v_lm), quantile(chains$v_lm,prob=c(0.025,0.975)))
+vshed.fit.stanLL <- rbind(vshed.fit.stanLL,
+        c(mean(chains$v_lsd), quantile(chains$v_lsd,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
+  tmp <- qlnorm(q, chains$v_lm, chains$v_lsd)
+  vshed.fit.stanLL <- rbind(vshed.fit.stanLL,
+                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+colnames(vshed.fit.stanLL) <- c("est","CIlow","CIhigh")
+rownames(vshed.fit.stanLL) <- c("meanlog",
+                            "sdlog",
+                            "p5","p25","p50","p75","p95")
+
+
+```
+
+
+
+#Combined stan analysis Lognomal for incubation period, Gamma others
+
+This is not working at this point.
+```{r}
+require(rstan)
+
+
+#Create a dataset with everythign lined up for passing into STAN
+zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
+zika.anal <- merge(zika.anal, vshed.nb.anal, all=TRUE)
+
+zika.anal$SL[which(is.na(zika.anal$SL))] <- 
+  zika.anal$EL[which(is.na(zika.anal$SL))]
+zika.anal$SR[which(is.na(zika.anal$SR))] <- 
+   zika.anal$ER[which(is.na(zika.anal$SR))] + 100
+
+zika.anal$VCL[which(is.na(zika.anal$VCL))] <-
+  zika.anal$EL[which(is.na(zika.anal$VCL))]
+zika.anal$VCR[which(is.na(zika.anal$VCR))] <- 
+  zika.anal$ER[which(is.na(zika.anal$VCR))] + 720
+
+zika.anal$VCR[which(is.infinite(zika.anal$VCR))] <- 
+  zika.anal$ER[which(is.infinite(zika.anal$VCR))] + 720
+
+#Replace
+
+#for STAN purposes, it is usefule if all of these variables index 
+#from 0
+stan.data <- list(N=nrow(zika.anal),
+                  EL=zika.anal$EL,
+                  ER=zika.anal$ER,
+                  SL=zika.anal$SL,
+                  SR=zika.anal$SR,
+                  VL=zika.anal$VCL,
+                  VR=zika.anal$VCR)
+
+
+#initialization version for the lognormal/lognormal stan model
+stan.init.LG <- function() {
+    rc <-list(E=runif(stan.data$N, stan.data$EL, stan.data$ER),
+                lm=runif(1,log(2),log(10)),
+                lsd = runif(1,.1,2),
+                v_alpha = runif(1,5,10),
+                v_beta= runif(1,.1,1) 
+                )
+    print(rc)
+    return(rc)
+    }
+
+
+
+#Need at least 20,000 iterations to converge
+full.fit <- stan("DistributionFitLG.stan", data=stan.data,
+                  init=stan.init.LG,
+                  iter=200, chains=3)
+
+
+#now we need to calculate the quantiles from the chains and construct our
+#data frame
+chains <- extract(full.fit)
+
+
+inc.fit.stan <- c(mean(chains$lm), quantile(chains$lm,prob=c(0.025,0.975)))
+inc.fit.stan <- rbind(inc.fit.stan,
+        c(mean(chains$lsd), quantile(chains$lsd,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
+  tmp <- qlnorm(q, chains$lm, chains$lsd)
+  inc.fit.stan <- rbind(inc.fit.stan,
+                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+colnames(inc.fit.stan) <- c("est","CIlow","CIhigh")
+rownames(inc.fit.stan) <- c("meanlog",
+                            "sdlog",
+                            "p5","p25","p50","p75","p95")
+
+
+
+vshed.fit.stan <- c(mean(chains$v_lm), quantile(chains$v_lm,prob=c(0.025,0.975)))
+vshed.fit.stan <- rbind(vshed.fit.stan,
+        c(mean(chains$v_lsd), quantile(chains$v_lsd,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
+  tmp <- qlnorm(q, chains$v_lm, chains$v_lsd)
+  vshed.fit.stan <- rbind(vshed.fit.stan,
+                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+colnames(vshed.fit.stan) <- c("est","CIlow","CIhigh")
+rownames(vshed.fit.stan) <- c("meanlog",
+                            "sdlog",
+                            "p5","p25","p50","p75","p95")
+
+
+```
