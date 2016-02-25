@@ -214,7 +214,7 @@ rownames(vshed.fit.stanLL) <- c("meanlog",
 #Combined stan analysis Lognomal for incubation period, Gamma others
 
 This is not working at this point.
-```{r}
+```{r, eval=FALSE}
 require(rstan)
 
 
