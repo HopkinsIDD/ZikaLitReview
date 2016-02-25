@@ -118,7 +118,7 @@ for (uid in unique(zika.vshed.nb$UID)) {
 
 #Combined stan analysis Lognormal for all distributions
 ```{r}
-require(rstan)
+library(rstan)
 
 
 #Create a dataset with everythign lined up for passing into STAN
