@@ -235,7 +235,10 @@ zika.anal$VCR[which(is.na(zika.anal$VCR))] <-
 zika.anal$VCR[which(is.infinite(zika.anal$VCR))] <- 
   zika.anal$ER[which(is.infinite(zika.anal$VCR))] + 720
 
-#Replace
+#renormalize everything so EL is 0
+zika.anal[,c("EL","ER","SL","SR","VCL","VCR")] <-
+  zika.anal[,c("EL","ER","SL","SR","VCL","VCR")] -zika.anal$EL  
+
 
 #for STAN purposes, it is usefule if all of these variables index 
 #from 0
@@ -248,15 +251,20 @@ stan.data <- list(N=nrow(zika.anal),
                   VR=zika.anal$VCR)
 
 
-#initialization version for the lognormal/lognormal stan model
+#initialization version for the lognormal/gamma stan model
+#in stan alpha = shape in R and beta = rate in R
+
+#use uniform from halfway trhough the exposure interval to ER.
+#still fails occasionally, but MUCH less often. 
 stan.init.LG <- function() {
-    rc <-list(E=runif(stan.data$N, stan.data$EL, stan.data$ER),
-                lm=runif(1,log(2),log(10)),
+    rc <-list(E=runif(stan.data$N, (stan.data$EL+stan.data$ER)/2, stan.data$ER),
+                lm= runif(1,log(2),log(10)),
                 lsd = runif(1,.1,2),
                 v_alpha = runif(1,5,10),
                 v_beta= runif(1,.1,1) 
                 )
-    print(rc)
+    #print(rc) #DEBUG
+    
     return(rc)
     }
 
@@ -265,7 +273,7 @@ stan.init.LG <- function() {
 #Need at least 20,000 iterations to converge
 full.fit <- stan("DistributionFitLG.stan", data=stan.data,
                   init=stan.init.LG,
-                  iter=200, chains=3)
+                  iter=2000, chains=4)
 
 
 #now we need to calculate the quantiles from the chains and construct our
@@ -289,19 +297,23 @@ rownames(inc.fit.stan) <- c("meanlog",
 
 
 
-vshed.fit.stan <- c(mean(chains$v_lm), quantile(chains$v_lm,prob=c(0.025,0.975)))
+#in stan alpha = shape in R and beta = rate in R
+vshed.fit.stan <- c(mean(chains$v_alpha), 
+                    quantile(chains$v_alpha,prob=c(0.025,0.975)))
 vshed.fit.stan <- rbind(vshed.fit.stan,
-        c(mean(chains$v_lsd), quantile(chains$v_lsd,prob=c(0.025,0.975))))
+        c(mean(chains$v_beta), 
+          quantile(chains$v_beta,prob=c(0.025,0.975))))
 for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
-  tmp <- qlnorm(q, chains$v_lm, chains$v_lsd)
+  tmp <- qgamma(q, shape=chains$v_alpha, rate=chains$v_beta)
   vshed.fit.stan <- rbind(vshed.fit.stan,
                         c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
 }
 
 colnames(vshed.fit.stan) <- c("est","CIlow","CIhigh")
-rownames(vshed.fit.stan) <- c("meanlog",
-                            "sdlog",
+rownames(vshed.fit.stan) <- c("alpha (shape)",
+                            "beta (rate)",
                             "p5","p25","p50","p75","p95")
 
 
 ```
+
