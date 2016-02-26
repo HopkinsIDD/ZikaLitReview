@@ -273,7 +273,7 @@ stan.init.LG <- function() {
 #Need at least 20,000 iterations to converge
 full.fit <- stan("DistributionFitLG.stan", data=stan.data,
                   init=stan.init.LG,
-                  iter=2000, chains=4)
+                  iter=1000, chains=4)
 
 
 #now we need to calculate the quantiles from the chains and construct our
@@ -313,6 +313,114 @@ colnames(vshed.fit.stan) <- c("est","CIlow","CIhigh")
 rownames(vshed.fit.stan) <- c("alpha (shape)",
                             "beta (rate)",
                             "p5","p25","p50","p75","p95")
+
+
+```
+
+
+
+#Combined stan analysis Lognomal for incubation period, Weibull for others
+
+This is not working at this point.
+```{r, eval=FALSE}
+require(rstan)
+
+
+#Create a dataset with everythign lined up for passing into STAN
+zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
+zika.anal <- merge(zika.anal, vshed.nb.anal, all=TRUE)
+
+zika.anal$SL[which(is.na(zika.anal$SL))] <- 
+  zika.anal$EL[which(is.na(zika.anal$SL))]
+zika.anal$SR[which(is.na(zika.anal$SR))] <- 
+   zika.anal$ER[which(is.na(zika.anal$SR))] + 100
+
+zika.anal$VCL[which(is.na(zika.anal$VCL))] <-
+  zika.anal$EL[which(is.na(zika.anal$VCL))]
+zika.anal$VCR[which(is.na(zika.anal$VCR))] <- 
+  zika.anal$ER[which(is.na(zika.anal$VCR))] + 720
+
+zika.anal$VCR[which(is.infinite(zika.anal$VCR))] <- 
+  zika.anal$ER[which(is.infinite(zika.anal$VCR))] + 720
+
+#renormalize everything so EL is 0
+zika.anal[,c("EL","ER","SL","SR","VCL","VCR")] <-
+  zika.anal[,c("EL","ER","SL","SR","VCL","VCR")] -zika.anal$EL  
+
+
+#for STAN purposes, it is usefule if all of these variables index 
+#from 0
+stan.data <- list(N=nrow(zika.anal),
+                  EL=zika.anal$EL,
+                  ER=zika.anal$ER,
+                  SL=zika.anal$SL,
+                  SR=zika.anal$SR,
+                  VL=zika.anal$VCL,
+                  VR=zika.anal$VCR)
+
+
+#initialization version for the lognormal/weibull stan model
+#in stan alpha = shape in R and beta = rate in R
+
+#use uniform from halfway trhough the exposure interval to ER.
+#still fails occasionally, but MUCH less often. 
+stan.init.LW <- function() {
+    rc <-list(E=runif(stan.data$N, (stan.data$EL+stan.data$ER)/2, stan.data$ER),
+                lm= runif(1,log(2),log(10)),
+                lsd = runif(1,.1,2),
+                v_alpha = 2,#,runif(1,5,10),
+                v_sigma= 50# runif(1,.5,2) 
+                )
+    print(rc) #DEBUG
+    curve(dweibull(x,rc$v_alpha, rc$v_sigma), from=0, to=50)
+    return(rc)
+    }
+
+
+
+#Need at least 20,000 iterations to converge
+full.fit <- stan("DistributionFitLW.stan", data=stan.data,
+                  init=stan.init.LW,
+                  iter=10000, chains=3)
+
+
+#now we need to calculate the quantiles from the chains and construct our
+#data frame
+chains <- extract(full.fit)
+
+
+inc.fit.stan <- c(mean(chains$lm), quantile(chains$lm,prob=c(0.025,0.975)))
+inc.fit.stan <- rbind(inc.fit.stan,
+        c(mean(chains$lsd), quantile(chains$lsd,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
+  tmp <- qlnorm(q, chains$lm, chains$lsd)
+  inc.fit.stan <- rbind(inc.fit.stan,
+                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+colnames(inc.fit.stan) <- c("est","CIlow","CIhigh")
+rownames(inc.fit.stan) <- c("meanlog",
+                            "sdlog",
+                            "p5","p25","p50","p75","p95")
+
+
+
+#in stan alpha = shape in R and beta = rate in R
+vshed.fit.stan <- c(mean(chains$v_alpha), 
+                    quantile(chains$v_alpha,prob=c(0.025,0.975)))
+vshed.fit.stan <- rbind(vshed.fit.stan,
+        c(mean(chains$v_sigma), 
+          quantile(chains$v_sigma,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95, 0.99)) {
+  tmp <- qweibull(q, chains$v_alpha, chains$v_sigma)
+  vshed.fit.stan <- rbind(vshed.fit.stan,
+                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+colnames(vshed.fit.stan) <- c("est","CIlow","CIhigh")
+rownames(vshed.fit.stan) <- c("alpha (shape)",
+                            "sigma (scale)",
+                            "p5","p25","p50","p75","p95","p99")
 
 
 ```

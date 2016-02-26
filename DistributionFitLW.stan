@@ -20,8 +20,8 @@ parameters {
   real lm; //the mean of the log normal distribution on the log scale
   real <lower=0> lsd; //the sd of the log normal distribution on the log scale
 
-  real <lower=0.001, upper=100> v_alpha;//alpha parameter for gamma distribution for viral shedding
-  real <lower=0.001, upper=100> v_beta; //beta prameter for gamma distribution for length of viral sheddig
+  real <lower=0> v_alpha;//alpha parameter for gamma distribution for viral shedding
+  real <lower=0> v_sigma; //beta prameter for gamma distribution for length of viral sheddig
 
   real E[N]; //the time of the infecting exposure
 
@@ -58,33 +58,24 @@ transformed parameters {
       LEN_VSP_SHORT[i] <- 0.001;
     }
   }
-
-  //further restict the timing of viral clearance. does not appear to be causing the convergence problesm
-  for (i in 1:N) {
-    if (LEN_VSP_SHORT[i] < LEN_IP_SHORT[i]) {
-      LEN_VSP_SHORT[i] <- LEN_IP_SHORT[i];
-    }
-  }
-
  
 }
 
 model {
   
-  lm ~ normal(0,100);//uninformative prior
+  lm ~ normal(0,1000);//uninformative prior
   lsd ~ uniform(0,5); //uninformative prior
 
+  v_alpha ~ uniform(0,100);//uninformative prior
+  v_sigma ~uniform(0,100); //uninformative prior
 
   E~uniform(EL,ER); //exposure in exposure period
   
 
   //increment probability based on the probability mass in between the possible ranges for each distrbution
   for (i in 1:N) {
-    increment_log_prob(log(lognormal_cdf(LEN_IP_LONG[i], lm, lsd) - 
-			   lognormal_cdf(LEN_IP_SHORT[i], lm, lsd)));
-
-    increment_log_prob(log(gamma_cdf(LEN_VSP_LONG[i],v_alpha, v_beta) - 
-    		   gamma_cdf(LEN_VSP_SHORT[i],v_alpha, v_beta)));
+    increment_log_prob(log(lognormal_cdf(LEN_IP_LONG[i], lm, lsd) - lognormal_cdf(LEN_IP_SHORT[i], lm, lsd)));
+    increment_log_prob(log(weibull_cdf(LEN_VSP_LONG[i],v_alpha, v_sigma) - weibull_cdf(LEN_VSP_SHORT[i],v_alpha, v_sigma)));
   }
   
 }
