@@ -116,6 +116,66 @@ for (uid in unique(zika.vshed.nb$UID)) {
 ```
 
 
+# Time to Seroconversion
+```{r}
+# For the first pass we will assume any seropositivity indicates
+#serpositivity by IgG
+
+zika.sero$ACL <- NA
+zika.sero$ACR <- NA
+
+#for the purposes of this analysis assume that a
+#NA in any antibody should be replaces with the IgM value
+zika.sero$ANYANTIBODY[is.na(zika.sero$ANYANTIBODY)] <- 
+  zika.sero$IGM[is.na(zika.sero$ANYANTIBODY)]
+
+
+#Loop through unique IDs bounding their time of 
+#seroconversion
+for (uid in unique(zika.sero$UID)) {
+  inds <- which(zika.sero$UID == uid)
+  tmp <- zika.sero[inds,]
+  
+  
+  # print(inds) # DEBUG
+  
+  #lowest time is the latest time with a negative serology
+  low.time <- max(tmp$AL[tmp$ANYANTIBODY==0])
+  
+   
+  #no earliest point...go to earliest possible  time of infection
+  if (low.time<tmp$EL[1]) {low.time <- tmp$EL[1]}
+  
+  #latest possible time is the earliest time of a positive antibody test. For our
+  #purposes, assume that equivocal is seropositive
+  high.time <- min(tmp$AR[which(tmp$ANYANTIBODY>0)])
+  
+  print("HERE")
+  zika.sero$ACL[inds] <- low.time
+  zika.sero$ACR[inds] <- high.time
+  
+}
+
+#make an analytic dataset with one row per person
+sero.anal <- zika.sero[,c("UID", "EL", "ER", "ACL","ACR")]
+sero.anal$type <- 0 
+sero.anal <- unique(sero.anal)
+
+
+#Fit using coarse data tools methods
+#for the most part this should be considered to be superceded by RStan stuff
+tmp <- sero.anal
+colnames(tmp) <- c("UID","EL","ER","SL","SR","type")
+
+tmp$SR[is.infinite(tmp$SR)] <- 
+  tmp$ER[is.infinite(tmp$SR)] + 730
+
+sero.fit<- dic.fit(tmp, dist = "L", n.boots = 1000)
+sero.fit.mcmc <- dic.fit.mcmc(tmp, dist="G")
+
+```
+
+
 #Combined stan analysis Lognormal for all distributions
 ```{r}
 library(rstan)
@@ -211,111 +271,6 @@ rownames(vshed.fit.stanLL) <- c("meanlog",
 
 
 
-#Combined stan analysis Lognomal for incubation period, Gamma others
-
-This is not working at this point.
-```{r, eval=FALSE}
-require(rstan)
-
-
-#Create a dataset with everythign lined up for passing into STAN
-zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
-zika.anal <- merge(zika.anal, vshed.nb.anal, all=TRUE)
-
-zika.anal$SL[which(is.na(zika.anal$SL))] <- 
-  zika.anal$EL[which(is.na(zika.anal$SL))]
-zika.anal$SR[which(is.na(zika.anal$SR))] <- 
-   zika.anal$ER[which(is.na(zika.anal$SR))] + 100
-
-zika.anal$VCL[which(is.na(zika.anal$VCL))] <-
-  zika.anal$EL[which(is.na(zika.anal$VCL))]
-zika.anal$VCR[which(is.na(zika.anal$VCR))] <- 
-  zika.anal$ER[which(is.na(zika.anal$VCR))] + 720
-
-zika.anal$VCR[which(is.infinite(zika.anal$VCR))] <- 
-  zika.anal$ER[which(is.infinite(zika.anal$VCR))] + 720
-
-#renormalize everything so EL is 0
-zika.anal[,c("EL","ER","SL","SR","VCL","VCR")] <-
-  zika.anal[,c("EL","ER","SL","SR","VCL","VCR")] -zika.anal$EL  
-
-
-#for STAN purposes, it is usefule if all of these variables index 
-#from 0
-stan.data <- list(N=nrow(zika.anal),
-                  EL=zika.anal$EL,
-                  ER=zika.anal$ER,
-                  SL=zika.anal$SL,
-                  SR=zika.anal$SR,
-                  VL=zika.anal$VCL,
-                  VR=zika.anal$VCR)
-
-
-#initialization version for the lognormal/gamma stan model
-#in stan alpha = shape in R and beta = rate in R
-
-#use uniform from halfway trhough the exposure interval to ER.
-#still fails occasionally, but MUCH less often. 
-stan.init.LG <- function() {
-    rc <-list(E=runif(stan.data$N, (stan.data$EL+stan.data$ER)/2, stan.data$ER),
-                lm= runif(1,log(2),log(10)),
-                lsd = runif(1,.1,2),
-                v_alpha = runif(1,5,10),
-                v_beta= runif(1,.1,1) 
-                )
-    #print(rc) #DEBUG
-    
-    return(rc)
-    }
-
-
-
-#Need at least 20,000 iterations to converge
-full.fit <- stan("DistributionFitLG.stan", data=stan.data,
-                  init=stan.init.LG,
-                  iter=1000, chains=4)
-
-
-#now we need to calculate the quantiles from the chains and construct our
-#data frame
-chains <- extract(full.fit)
-
-
-inc.fit.stan <- c(mean(chains$lm), quantile(chains$lm,prob=c(0.025,0.975)))
-inc.fit.stan <- rbind(inc.fit.stan,
-        c(mean(chains$lsd), quantile(chains$lsd,prob=c(0.025,0.975))))
-for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
-  tmp <- qlnorm(q, chains$lm, chains$lsd)
-  inc.fit.stan <- rbind(inc.fit.stan,
-                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
-}
-
-colnames(inc.fit.stan) <- c("est","CIlow","CIhigh")
-rownames(inc.fit.stan) <- c("meanlog",
-                            "sdlog",
-                            "p5","p25","p50","p75","p95")
-
-
-
-#in stan alpha = shape in R and beta = rate in R
-vshed.fit.stan <- c(mean(chains$v_alpha), 
-                    quantile(chains$v_alpha,prob=c(0.025,0.975)))
-vshed.fit.stan <- rbind(vshed.fit.stan,
-        c(mean(chains$v_beta), 
-          quantile(chains$v_beta,prob=c(0.025,0.975))))
-for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
-  tmp <- qgamma(q, shape=chains$v_alpha, rate=chains$v_beta)
-  vshed.fit.stan <- rbind(vshed.fit.stan,
-                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
-}
-
-colnames(vshed.fit.stan) <- c("est","CIlow","CIhigh")
-rownames(vshed.fit.stan) <- c("alpha (shape)",
-                            "beta (rate)",
-                            "p5","p25","p50","p75","p95")
-
-
-```
 
 
 
@@ -360,7 +315,7 @@ stan.data <- list(N=nrow(zika.anal),
 
 
 #initialization version for the lognormal/weibull stan model
-#in stan alpha = shape in R and beta = rate in R
+
 
 #use uniform from halfway trhough the exposure interval to ER.
 #still fails occasionally, but MUCH less often. 
@@ -425,3 +380,110 @@ rownames(vshed.fit.stan) <- c("alpha (shape)",
 
 ```
 
+
+
+#Combined stan analysis Lognomal for incubation period, Gamma others
+#THIS DOES NOT WORK!!!!
+This is not working at this point.
+```{r, eval=FALSE}
+require(rstan)
+
+
+#Create a dataset with everythign lined up for passing into STAN
+zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
+zika.anal <- merge(zika.anal, vshed.nb.anal, all=TRUE)
+
+zika.anal$SL[which(is.na(zika.anal$SL))] <- 
+  zika.anal$EL[which(is.na(zika.anal$SL))]
+zika.anal$SR[which(is.na(zika.anal$SR))] <- 
+   zika.anal$ER[which(is.na(zika.anal$SR))] + 100
+
+zika.anal$VCL[which(is.na(zika.anal$VCL))] <-
+  zika.anal$EL[which(is.na(zika.anal$VCL))]
+zika.anal$VCR[which(is.na(zika.anal$VCR))] <- 
+  zika.anal$ER[which(is.na(zika.anal$VCR))] + 720
+
+zika.anal$VCR[which(is.infinite(zika.anal$VCR))] <- 
+  zika.anal$ER[which(is.infinite(zika.anal$VCR))] + 720
+
+#renormalize everything so EL is 0
+zika.anal[,c("EL","ER","SL","SR","VCL","VCR")] <-
+  zika.anal[,c("EL","ER","SL","SR","VCL","VCR")] -zika.anal$EL  
+
+
+#for STAN purposes, it is usefule if all of these variables index 
+#from 0
+stan.data <- list(N=nrow(zika.anal),
+                  EL=zika.anal$EL,
+                  ER=zika.anal$ER,
+                  SL=zika.anal$SL,
+                  SR=zika.anal$SR,
+                  VL=zika.anal$VCL,
+                  VR=zika.anal$VCR)
+
+
+#initialization version for the lognormal/gamma stan model
+#in stan alpha = shape in R and beta = rate in R
+
+#use uniform from halfway trhough the exposure interval to ER.
+#still fails occasionally, but MUCH less often. 
+stan.init.LG <- function() {
+    rc <-list(E=runif(stan.data$N, (stan.data$EL+stan.data$ER)/2, stan.data$ER),
+                lm= runif(1,log(2),log(10)),
+                lsd = runif(1,.1,2),
+                v_alpha = 5,#runif(1,5,10),
+                v_beta= .1#runif(1,.1,1) 
+                )
+    #print(rc) #DEBUG
+    
+    return(rc)
+    }
+
+
+
+#Need at least 20,000 iterations to converge
+full.fit <- stan("DistributionFitLG.stan", data=stan.data,
+                  init=stan.init.LG,
+                  iter=100, chains=4)
+
+
+#now we need to calculate the quantiles from the chains and construct our
+#data frame
+chains <- extract(full.fit)
+
+
+inc.fit.stan <- c(mean(chains$lm), quantile(chains$lm,prob=c(0.025,0.975)))
+inc.fit.stan <- rbind(inc.fit.stan,
+        c(mean(chains$lsd), quantile(chains$lsd,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
+  tmp <- qlnorm(q, chains$lm, chains$lsd)
+  inc.fit.stan <- rbind(inc.fit.stan,
+                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+colnames(inc.fit.stan) <- c("est","CIlow","CIhigh")
+rownames(inc.fit.stan) <- c("meanlog",
+                            "sdlog",
+                            "p5","p25","p50","p75","p95")
+
+
+
+#in stan alpha = shape in R and beta = rate in R
+vshed.fit.stan <- c(mean(chains$v_alpha), 
+                    quantile(chains$v_alpha,prob=c(0.025,0.975)))
+vshed.fit.stan <- rbind(vshed.fit.stan,
+        c(mean(chains$v_beta), 
+          quantile(chains$v_beta,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
+  tmp <- qgamma(q, shape=chains$v_alpha, rate=chains$v_beta)
+  vshed.fit.stan <- rbind(vshed.fit.stan,
+                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+colnames(vshed.fit.stan) <- c("est","CIlow","CIhigh")
+rownames(vshed.fit.stan) <- c("alpha (shape)",
+                            "beta (rate)",
+                            "p5","p25","p50","p75","p95")
+
+
+```
