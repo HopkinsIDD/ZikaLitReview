@@ -12,6 +12,10 @@ First load the data and figure out how big our data set is for each purpose.
 ```{r}
 zika <- read.csv("ZikaLitReviewData.csv")
 
+
+#DROP PERINATAL TRANSMISSIONS
+zika <- zika[which(zika$TRANS.MECH!="perinatal"),]  
+
 #How many people do we have?
 length(unique(zika$UID))
 
@@ -82,7 +86,10 @@ zika.vshed.nb <- zika.vshed[which(zika.vshed$SAMPLE.TYPE %in%c("serum","blood"))
 for (uid in unique(zika.vshed.nb$UID)) {
   inds <- which(zika.vshed.nb$UID==uid)
   tmp <- zika.vshed.nb[inds,] 
-  low.time <- max(tmp$VL[tmp$SHEDDING==1])
+  
+  #taking greater than rqualt to 1 means we will treat equivocal results as 
+  #positive
+  low.time <- max(tmp$VL[tmp$SHEDDING>=1])
   
   #no earliest point...go to earliest time of infection
   if (low.time<tmp$EL[1]) {low.time <- tmp$EL[1]}
