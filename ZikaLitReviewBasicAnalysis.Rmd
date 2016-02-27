@@ -37,7 +37,7 @@ length(unique(zika.sero$UID))
 
 ```
 
-So we have data with which to estimate the incubation period from 20 people; 40 observations from 17 people to estimate the length of viral shedding; and 109 observations from 21 people to estimate the time to seropositivity.
+So we have data with which to estimate the incubation period from 25 people; 46 observations from 20 people to estimate the length of viral shedding; and 63 observations from 22 people to estimate the time to seropositivity.
 
 
 #Incubation Period
@@ -52,8 +52,8 @@ inc.dat <- zika.inc[,c("EL","ER","SL","SR")]
 inc.dat$type <- 0
 
 #fit it...use bootstrap interstions for now. MCMC better?
-#inc.fit <- dic.fit(inc.dat,dist="L",n.boots=1000,
-#                   ptiles = c(0.05, 0.25, 0.5, 0.75, 0.95))
+inc.fit <- dic.fit(inc.dat,dist="L",n.boots=1000,
+                   ptiles = c(0.05, 0.25, 0.5, 0.75, 0.95))
 
 
 inc.fit.mcmc <- dic.fit.mcmc(inc.dat, n.samples = 2000,
@@ -69,7 +69,8 @@ inc.fit.mcmc
 ```
 
 
-We estimate the mean incubation period of Zika virus to be 5.7 days (95% CI: 3.9-7.9). The dispersion is 1.60 (95% CI: 1.31-2.42). Hence 5% of cases will develop symptoms by 2.6 days after infection (95% CI: 1.1-4.0), 25% by 4.1 days (95% CI: 2.4-5.7), 75% by 7.8 days (95% CI: 5.6-12.1) and 95% by 12.4 days (95% CI: 7.9-26.0).
+Based on the independent MCMC analysis, assuming that the incubation period for Zika
+infection follows a log-normal diatribution, we estimate the mean incubation period to be 6.3 days (95% CI: 4.8-8.2). The dispersion is 1.38 (95% CI: 1.2-1.8). Hence 5% of cases will develop symptoms by 3.7 days after infection (95% CI: 2.2-4.9), 25% by 5.1 days (95% CI: 3.7-6.4), 75% by 7.9 days (95% CI: 5.9-11.1) and 95% by 10.7 days (95% CI: 7.4-19.0).
 
 
 
@@ -77,15 +78,15 @@ We estimate the mean incubation period of Zika virus to be 5.7 days (95% CI: 3.9
 
 ```{r}
 
-#first pass, restrict to no blood
-zika.vshed.nb <- zika.vshed[which(zika.vshed$SAMPLE.TYPE %in%c("serum","blood")),]
+#first pass, restrict to blood (i.e., not saliva or uring)
+zika.vshed.bl <- zika.vshed[which(zika.vshed$SAMPLE.TYPE %in%c("serum","blood")),]
 
 #Go through and find the start of the latest period in whihc
 #someone tested seropositive and the end of the latest subsequent
 #period where they did not....these bound seroconversion
-for (uid in unique(zika.vshed.nb$UID)) {
-  inds <- which(zika.vshed.nb$UID==uid)
-  tmp <- zika.vshed.nb[inds,] 
+for (uid in unique(zika.vshed.bl$UID)) {
+  inds <- which(zika.vshed.bl$UID==uid)
+  tmp <- zika.vshed.bl[inds,] 
   
   #taking greater than rqualt to 1 means we will treat equivocal results as 
   #positive
@@ -98,26 +99,26 @@ for (uid in unique(zika.vshed.nb$UID)) {
   ##print(tmp) ###DEBUG
   ##cat(uid, low.time, high.time,"\n") ###DEBUG
   
-  zika.vshed.nb$VCL[inds] <- low.time
-  zika.vshed.nb$VCR[inds] <- high.time
+  zika.vshed.bl$VCL[inds] <- low.time
+  zika.vshed.bl$VCR[inds] <- high.time
   }
 
 
   #make the anlytic dataset
-  vshed.nb.anal <- zika.vshed.nb[,c("UID","EL","ER","VCL","VCR")]
-  vshed.nb.anal$type <- 0
-  vshed.nb.anal <- unique(vshed.nb.anal) #one row per observation
+  vshed.bl.anal <- zika.vshed.bl[,c("UID","EL","ER","VCL","VCR")]
+  vshed.bl.anal$type <- 0
+  vshed.bl.anal <- unique(vshed.bl.anal) #one row per observation
 
-  ###REPLACED BY STAN ANALYSIS
-  #colnames(vshed.nb.anal) <- c("UID","EL","ER","SL","SR","type")
-
-  #change the infinite SRs to something really big
-  #vshed.nb.anal$SR[is.infinite(vshed.nb.anal$SR)] <- 
-  #    vshed.nb.anal$ER[is.infinite(vshed.nb.anal$SR)] + 730
-
-  #now lets fit a gamma distribution to this data using MCMC
-  #vshed.fit <- dic.fit(vshed.nb.anal, dist = "G", n.boots = 10000)
-  #vshed.fit.mcmc <- dic.fit.mcmc(vshed.nb.anal, dist = "L",
+  ###SUPECEDE BY JOINT STAN ANALYSIS, BUT KEPT FOR COMPARISON
+#   colnames(vshed.bl.anal) <- c("UID","EL","ER","SL","SR","type")
+# 
+#   #change the infinite SRs to something really big
+#   vshed.bl.anal$SR[is.infinite(vshed.bl.anal$SR)] <- 
+#       vshed.bl.anal$ER[is.infinite(vshed.bl.anal$SR)] + 730
+# 
+#   #now lets fit a gamma distribution to this data using MCMC
+#  vshed.fit <- dic.fit(vshed.bl.anal, dist = "W", n.boots = 100)
+  #vshed.fit.mcmc <- dic.fit.mcmc(vshed.bl.anal, dist = "G",
   #                               burnin = 300,n.samples=500, optim.method="L-BFGS-B")
 
 ```
@@ -157,7 +158,7 @@ for (uid in unique(zika.sero$UID)) {
   #purposes, assume that equivocal is seropositive
   high.time <- min(tmp$AR[which(tmp$ANYANTIBODY>0)])
   
-  print("HERE")
+  
   zika.sero$ACL[inds] <- low.time
   zika.sero$ACR[inds] <- high.time
   
@@ -171,14 +172,17 @@ sero.anal <- unique(sero.anal)
 
 #Fit using coarse data tools methods
 #for the most part this should be considered to be superceded by RStan stuff
-tmp <- sero.anal
-colnames(tmp) <- c("UID","EL","ER","SL","SR","type")
 
-tmp$SR[is.infinite(tmp$SR)] <- 
-  tmp$ER[is.infinite(tmp$SR)] + 730
+############A BIT OF A DISASTER, DUES NOT WORK
 
-sero.fit<- dic.fit(tmp, dist = "L", n.boots = 1000)
-sero.fit.mcmc <- dic.fit.mcmc(tmp, dist="G")
+# tmp <- sero.anal
+# colnames(tmp) <- c("UID","EL","ER","SL","SR","type")
+# 
+# tmp$SR[is.infinite(tmp$SR)] <- 
+#   tmp$ER[is.infinite(tmp$SR)] + 730
+# 
+# sero.fit<- dic.fit(tmp, dist = "G", n.boots = 100)
+# sero.fit.mcmc <- dic.fit.mcmc(tmp, dist="W")
 
 ```
 
@@ -190,7 +194,7 @@ library(rstan)
 
 #Create a dataset with everythign lined up for passing into STAN
 zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
-zika.anal <- merge(zika.anal, vshed.nb.anal, all=TRUE)
+zika.anal <- merge(zika.anal, vshed.bl.anal, all=TRUE)
 
 zika.anal$SL[which(is.na(zika.anal$SL))] <- 
   zika.anal$EL[which(is.na(zika.anal$SL))]
@@ -233,14 +237,14 @@ stan.init.LL <- function() {
 
 
 #Need at least 20,000 iterations to converge
-full.fit <- stan("DistributionFitLL.stan", data=stan.data,
+full.fit.LL <- stan("DistributionFitLL.stan", data=stan.data,
                   init=stan.init.LL,
-                  iter=20000, chains=3)
+                  iter=35000, chains=4, thin=10)
 
 
 #now we need to calculate the quantiles from the chains and construct our
 #data frame
-chains <- extract(full.fit)
+chains <- extract(full.fit.LL)
 
 
 inc.fit.stanLL <- c(mean(chains$lm), quantile(chains$lm,prob=c(0.025,0.975)))
@@ -277,20 +281,20 @@ rownames(vshed.fit.stanLL) <- c("meanlog",
 ```
 
 
+Based on 4 chains, 35,000 interations per chain, assiming that both the time to symptom onset and the time to viral clearance follow a log-normal distribution, we estimate that the mean incubation period is 6.2 days (95% CI: 4.8-8.1) with a dispersion of 1.49 (95% CI: 1.24-1.94). 90% of cases will develop symptoms between 3.3 and 12.3 days of infectoin (95% CIs: 1.9-4.8 and 8.0-20.5).
 
-
+The mean time to viral cleanace is estimated to be 7.1 days (95% CI: 1.8-12.3) with a dispersiont of 2.47 (95% CI: 1.30-16.1). We expext 90% of people to clear virus between 3 and 54 days after infection (95% CI: 0-7 and 12-280).
 
 
 #Combined stan analysis Lognomal for incubation period, Weibull for others
 
-This is not working at this point.
 ```{r, eval=FALSE}
 require(rstan)
 
 
 #Create a dataset with everythign lined up for passing into STAN
 zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
-zika.anal <- merge(zika.anal, vshed.nb.anal, all=TRUE)
+zika.anal <- merge(zika.anal, vshed.bl.anal, all=TRUE)
 
 zika.anal$SL[which(is.na(zika.anal$SL))] <- 
   zika.anal$EL[which(is.na(zika.anal$SL))]
@@ -341,9 +345,9 @@ stan.init.LW <- function() {
 
 
 #Need at least 20,000 iterations to converge
-full.fit <- stan("DistributionFitLW.stan", data=stan.data,
+full.fit.LW <- stan("DistributionFitLW.stan", data=stan.data,
                   init=stan.init.LW,
-                  iter=10000, chains=3)
+                  iter=35000, chains=4, thin=10)
 
 
 #now we need to calculate the quantiles from the chains and construct our
@@ -351,36 +355,36 @@ full.fit <- stan("DistributionFitLW.stan", data=stan.data,
 chains <- extract(full.fit)
 
 
-inc.fit.stan <- c(mean(chains$lm), quantile(chains$lm,prob=c(0.025,0.975)))
-inc.fit.stan <- rbind(inc.fit.stan,
+inc.fit.stan.LW <- c(mean(chains$lm), quantile(chains$lm,prob=c(0.025,0.975)))
+inc.fit.stan.LW <- rbind(inc.fit.stan.LW,
         c(mean(chains$lsd), quantile(chains$lsd,prob=c(0.025,0.975))))
 for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
   tmp <- qlnorm(q, chains$lm, chains$lsd)
-  inc.fit.stan <- rbind(inc.fit.stan,
+  inc.fit.stan.LW <- rbind(inc.fit.stan.LW,
                         c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
 }
 
-colnames(inc.fit.stan) <- c("est","CIlow","CIhigh")
-rownames(inc.fit.stan) <- c("meanlog",
+colnames(inc.fit.stan.LW) <- c("est","CIlow","CIhigh")
+rownames(inc.fit.stan.LW) <- c("meanlog",
                             "sdlog",
                             "p5","p25","p50","p75","p95")
 
 
 
 #in stan alpha = shape in R and beta = rate in R
-vshed.fit.stan <- c(mean(chains$v_alpha), 
+vshed.fit.stan.LW <- c(mean(chains$v_alpha), 
                     quantile(chains$v_alpha,prob=c(0.025,0.975)))
-vshed.fit.stan <- rbind(vshed.fit.stan,
+vshed.fit.stan.LW <- rbind(vshed.fit.stan.LW,
         c(mean(chains$v_sigma), 
           quantile(chains$v_sigma,prob=c(0.025,0.975))))
 for (q in c(0.05, 0.25, 0.5, 0.75, 0.95, 0.99)) {
   tmp <- qweibull(q, chains$v_alpha, chains$v_sigma)
-  vshed.fit.stan <- rbind(vshed.fit.stan,
+  vshed.fit.stan.LW <- rbind(vshed.fit.stan.LW,
                         c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
 }
 
-colnames(vshed.fit.stan) <- c("est","CIlow","CIhigh")
-rownames(vshed.fit.stan) <- c("alpha (shape)",
+colnames(vshed.fit.stan.LW) <- c("est","CIlow","CIhigh")
+rownames(vshed.fit.stan.LW) <- c("alpha (shape)",
                             "sigma (scale)",
                             "p5","p25","p50","p75","p95","p99")
 
@@ -398,7 +402,7 @@ require(rstan)
 
 #Create a dataset with everythign lined up for passing into STAN
 zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
-zika.anal <- merge(zika.anal, vshed.nb.anal, all=TRUE)
+zika.anal <- merge(zika.anal, vshed.bl.anal, all=TRUE)
 
 zika.anal$SL[which(is.na(zika.anal$SL))] <- 
   zika.anal$EL[which(is.na(zika.anal$SL))]
