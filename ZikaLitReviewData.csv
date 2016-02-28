@@ -1,7 +1,7 @@
 REFID,AUTHOR,YEAR,UID,N,EL,ER,SL,SR,VL,VR,SHEDDING,SAMPLE.TYPE,AL,AR,ANYANTIBODY,IGM,TRANS.MECH,AGE,SEX,COUNTRY.ORIGIN,notes1,notes2
-32,Korhonen,2016,32.1,1,41989.0000,42171.3750,42173.0000,42173.9993,,,,,,,,,,37,0,Finland,traveler,"traveler from finland to Maldives. Not sure if landed or departed on 6/16/2015; to be conservative chose it as departure date. Wife and 2 children were exposed at the same time, were PCR neg for pan-flavivirus NS5. Children were seroneg for DENV, wife was IgG and IgM seropos for DENV. "
-32,Korhonen,2016,32.1,1,41989.0000,42171.3750,,,42180.0000,42180.4993,1,urine,,,,,,37,0,Finland,,"No Zika virus detected in serum sample. Serum IgG and IgM positive, PCR negative for Dengue 6/24/16"
-32,Korhonen,2016,32.1,1,41989.0000,42171.3750,,,42179.0000,42179.9993,0,serum,,,,,,37,0,Finland,,
+32,Korhonen,2016,32.1,1,41989.0000,42171.9993,42173.0000,42173.9993,,,,,,,,,,37,0,Finland,traveler,"traveler from finland to Maldives. Not sure if landed or departed on 6/16/2015; to be conservative chose it as departure date. Wife and 2 children were exposed at the same time, were PCR neg for pan-flavivirus NS5. Children were seroneg for DENV, wife was IgG and IgM seropos for DENV. "
+32,Korhonen,2016,32.1,1,41989.0000,42171.9993,,,42180.0000,42180.4993,1,urine,,,,,,37,0,Finland,,"No Zika virus detected in serum sample. Serum IgG and IgM positive, PCR negative for Dengue 6/24/16"
+32,Korhonen,2016,32.1,1,41989.0000,42171.9993,,,42179.0000,42179.9993,0,serum,,,,,,37,0,Finland,,
 35,Shinohara,2016,35.1,1,41845.0000,41851.9993,41853.0000,41853.9993,,,,,,,,,,,0,Japan,"traveler, age early 40s",
 35,Shinohara,2016,35.1,1,41845.0000,41851.9993,,,,,,,41855.0000,41855.9993,0,0,,,0,Japan,"traveler, age early 40s",equivocal results of PCR of serum samples collected on 8/4/2014
 35,Shinohara,2016,35.1,1,41845.0000,41851.9993,,,,,,,41858.0000,41858.9993,1,1,,,0,Japan,"traveler, age early 40s",anti-DENV IgG and anti-DENV IgM positive; neg PCR for DENV non-structural protein antigen
