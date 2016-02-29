@@ -1,0 +1,289 @@
+---
+title: "Zika Literature Review - Supplement"
+author: "Justin Lessler"
+date: "Monday, February 29, 2016"
+output: html_document
+---
+
+
+```{r}
+#Variables to make code work with the local environemnt
+
+
+````
+# 1 Statistical Analysis
+
+## 1.1 Data cleaning 
+
+All analytic data sets and code, including the R-markdown file used to generate this supplement, is available from https://github.com/HopkinsIDD/ZikaLitReview.git. 
+
+Analytic data is available in the file ZikaLitReviewData.csv, which consists of one line per observation of a bounded time of symptom onset, virologic testing or serologic testing. The main analysis is based on all abstracted observations, minus those that were reports of perinatal transmission. 
+
+
+```{r, echo=FALSE}
+zika <- read.csv("ZikaLitReviewData.csv")
+
+#DROP PERINATAL TRANSMISSIONS
+zika <- zika[which(zika$TRANS.MECH!="perinatal"),]  
+
+#Now lets divide data sets by observation type.
+
+#Incubation period
+zika.inc <- zika[!is.na(zika$SL),]
+
+#Period of viral shedding
+zika.vshed <- zika[!is.na(zika$VL),]
+
+#Time to seropositiveity
+zika.sero <- zika[!is.na(zika$AL),]
+```
+
+### 1.1.1. Determining possible times of viral clearance
+To calculate the period of viral clearance from blood, definied as the last moment there is detectable Zika virus in a blood sample, we follow the following procedure:
+
+1. All virolgic tests from samples other than blood are excluded.
+2. THe earliest possible time of viral clearance is:
+    + *if a positive or equivocal test was reported:* the time of the last postive virologic test
+    + *if no positive or equivoval test was reported:* the earliest possible time of exposure
+3. The latest possible time of viral clearance is:
+    + *if negative and positive tests were reported:* the time of the first negative test following a positive test
+    + *if only negatve tests were reported:* the time of that negative test
+    + *if not negative tests were reported:* infinited/undefined
+
+
+
+```{r, echo=FALSE, warning=FALSE}
+#first pass, restrict to blood (i.e., not saliva or uring)
+zika.vshed.bl <- zika.vshed[which(zika.vshed$SAMPLE.TYPE %in%c("serum","blood")),]
+
+#Go through and find the start of the latest period in which
+#someone tested seropositive and the end of the latest subsequent
+#period where they did not....these bound seroconversion
+for (uid in unique(zika.vshed.bl$UID)) {
+  inds <- which(zika.vshed.bl$UID==uid)
+  tmp <- zika.vshed.bl[inds,] 
+  
+  #taking greater than rqualt to 1 means we will treat equivocal results as 
+  #positive
+  low.time <- max(tmp$VL[tmp$SHEDDING>=1])
+  
+  #no earliest point...go to earliest time of infection
+  if (low.time<tmp$EL[1]) {low.time <- tmp$EL[1]}
+  
+  high.time <- min(tmp$VR[tmp$SHEDDING==0 &  tmp$VR>low.time])
+
+  zika.vshed.bl$VCL[inds] <- low.time
+  zika.vshed.bl$VCR[inds] <- high.time
+  }
+
+  #make the anlytic dataset
+  vshed.bl.anal <- zika.vshed.bl[,c("UID","EL","ER","VCL","VCR")]
+  vshed.bl.anal$type <- 0
+  vshed.bl.anal <- unique(vshed.bl.anal) #one row per observation
+  
+```
+
+
+### 1.1.2. Determining possible times of seroconversion
+
+Seroconversion was defined as the time at which antibody first becomes detectable in the blood. It the period of possible seroconversion is calculated similarly to the period of possible viral clearance:
+
+1. THe earliest possible time of seroconversion is:
+    + *if a negative test was reported:* the time of the last negative serologic test
+    + *if no negative test was reported:* the earliest possible time of exposure
+3. The latest possible time of seroconversion is:    
+    + *if a postive or equivocal serological test is reported:* the time of the first positive or equivoval test
+    + *if no postive/equivoval tests were reported:* infinite/undefined
+
+
+```{r, echo=FALSE, warning=FALSE}
+# For the first pass we will assume any seropositivity indicates
+#serpositivity by IgG
+
+zika.sero$ACL <- NA
+zika.sero$ACR <- NA
+
+#for the purposes of this analysis assume that a
+#NA in any antibody should be replaces with the IgM value
+zika.sero$ANYANTIBODY[is.na(zika.sero$ANYANTIBODY)] <- 
+  zika.sero$IGM[is.na(zika.sero$ANYANTIBODY)]
+
+
+#Loop through unique IDs bounding their time of 
+#seroconversion
+for (uid in unique(zika.sero$UID)) {
+  inds <- which(zika.sero$UID == uid)
+  tmp <- zika.sero[inds,]
+  
+  
+  # print(inds) # DEBUG
+  
+  #lowest time is the latest time with a negative serology
+  low.time <- max(tmp$AL[tmp$ANYANTIBODY==0])
+  
+   
+  #no earliest point...go to earliest possible  time of infection
+  if (low.time<tmp$EL[1]) {low.time <- tmp$EL[1]}
+  
+  #latest possible time is the earliest time of a positive antibody test. For our
+  #purposes, assume that equivocal is seropositive
+  high.time <- min(tmp$AR[which(tmp$ANYANTIBODY>0)])
+  
+  
+  zika.sero$ACL[inds] <- low.time
+  zika.sero$ACR[inds] <- high.time
+  
+}
+
+#make an analytic dataset with one row per person
+sero.anal <- zika.sero[,c("UID", "EL", "ER", "ACL","ACR")]
+sero.anal$type <- 0 
+sero.anal <- unique(sero.anal)
+```
+
+
+```{r, echo=FALSE}
+#Merges evertying into a single dataset
+
+
+#Create a dataset with everythign lined up for passing into STAN
+zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
+zika.anal <- merge(zika.anal, vshed.bl.anal, all=TRUE)
+zika.anal$type <- 0 #we don't use this, but helps with the merge.
+zika.anal <- merge(zika.anal, sero.anal, all=TRUE)
+
+#renormalize everything so EL is 0
+zika.anal[,c("EL","ER","SL","SR","VCL","VCR","ACL","ACR")] <-
+  zika.anal[,c("EL","ER","SL","SR","VCL","VCR","ACL","ACR")] -zika.anal$EL  
+
+ 
+
+```
+
+## 1.2 Statistical Analysis
+
+
+```{r, echo=FALSE}
+
+  #assuming observationsiwth no upper limite have NAs in the R slot. Currently only in VCR column
+  zika.anal.jags <- zika.anal
+  zika.anal.jags$VCR[which(is.infinite(zika.anal.jags$VCR))] <-  NA
+
+  #missing observation are just unbounded, replace with 0
+  zika.anal.jags$VCL[which(is.na(zika.anal.jags$VCL))] <-  0
+  zika.anal.jags$ACL[which(is.na(zika.anal.jags$ACL))] <-  0
+
+
+  #make a data object for JAGS
+  jags.data <- list(       
+                  ER=zika.anal.jags$ER,
+                  SL=zika.anal.jags$SL,
+                  SR=zika.anal.jags$SR,
+                  VL=zika.anal.jags$VCL,
+                  VR=zika.anal.jags$VCR, 
+                  AL=zika.anal.jags$ACL,
+                  AR=zika.anal.jags$ACR)
+
+
+  #Let jags know the censoring situation
+  #1 means interval censored
+  #2 means event occured after known time
+  jags.data$VSPisCensored=rep(1,25)
+  jags.data$VSPisCensored[which(is.na(jags.data$VR))]=2
+
+  jags.data$IPisCensored=rep(1,25)
+  jags.data$IPisCensored[which(is.na(jags.data$SR))]=2
+
+  jags.data$ASPisCensored=rep(1,25)
+  jags.data$ASPisCensored[which(is.na(jags.data$AR))]=2
+
+  require(rjags)#installed JAGS must be 4.1 or higher
+
+  #define variablees to hold the length of the
+  #time to event for symptoms, viral clearance, and seroconversion
+  jags.data$Y_S <- rep(NA, 25)
+  jags.data$Y_V <- rep(NA, 25)
+  jags.data$Y_A <- rep(NA,25)
+
+  #set the intitial values for time to event (i.e., Y_S, Y_V and Y_A)
+  IPyInit =  jags.data$SL
+  IPyInit[which(is.na(jags.data$SL)==T)]=0
+  IPyInit[which(IPyInit==0)]=0.0000000011
+
+  ASPyInit =  jags.data$AL
+  ASPyInit[which(is.na(jags.data$AL)==T)]=0
+  ASPyInit[which(ASPyInit==0)]=0.0000000011
+
+
+  VSPyInit =  jags.data$VL
+  VSPyInit[which(is.na(jags.data$VL)==T)]=0
+  VSPyInit[which(VSPyInit==0)]=0.0000000011
+  
+
+  #identify whcih observations are interval censored and which are rihg censored. 
+  jags.data$dic=which(jags.data$IPisCensored==1) #this is all inclubation period observtions
+  jags.data$Adic=which(jags.data$ASPisCensored==1) 
+  jags.data$Arc=which(jags.data$ASPisCensored==2) 
+  jags.data$Vdic=which(jags.data$VSPisCensored==1)
+  jags.data$Vrc=which(jags.data$VSPisCensored==2)
+  
+ 
+  
+  #set the parameters we want to track
+  parameters <- c("lm","lsd","v_v","scale_v","v_a","scale_a", "E")
+
+  set.seed(1456781173)
+  #initialization function for jags
+  jags.inits <-  function() {
+    rc <-list(E=rep(0.0000000011,25), #start with a fixed E to avoid bad starting points
+              lm=runif(1,log(2),log(10)),
+              lsd = runif(1,.1,log(3)), 
+              v_a=runif(1,1,10),
+              scale_a= runif(1,0,1), 
+              v_v = runif(1,1,10),
+              scale_v = runif(1,0,1), 
+              Y_S=IPyInit,
+              Y_V=VSPyInit,
+              Y_A=ASPyInit)
+    print(rc)
+    return(rc)
+  }
+  
+```
+
+```{r, eval=FALSE}
+#not evaluated during knitting, run to get the next section to work
+#note, we deal with the burnin manually later.
+
+#initialize JAGS model
+jagsfit.LWW <- jags.model(file='DistributionFitLWW.jags', 
+                          data=jags.data, 
+                          inits=jags.inits, 
+                          n.chains=3, quiet=F, 
+                          n.adapt=10000)
+
+
+iters<- 1000000
+thin <- 50
+
+full.fit.LWW <- coda.samples(jagsfit.LWW, parameters, n.iter=iters, thin=thin, n.chains=3)
+
+#make all of the chains a single matrix with a burnin removed
+ABC1=as.matrix(full.fit.LWW[[1]][,])
+ABC2=as.matrix(full.fit.LWW[[2]][,])
+ABC3=as.matrix(full.fit.LWW[[3]][,])
+
+ABC1=ABC1[2001:(iters/thin),]
+ABC2=ABC2[2001:(iters/thin),]
+ABC3=ABC3[2001:(iters/thin),]
+
+full.fit.LWW <- rbind(ABC1,ABC2,ABC3)
+
+
+save(full.fit.LWW, file="..\full.fit.jags.LWW.RData")
+```
+
+# 2 Blood Supply Safety
+
+
+# 3 Model Checking and Sensitivity Analysis
