@@ -16,16 +16,16 @@ theme_set(theme_bw())
 
 Loading in data and reformatting a bit for easier plotting.
 ```{r}
-dat <- read.csv("ZikaLitReviewData.csv")
-dat <- dat %>% separate(UID, into=c("id", "id.obs"), remove=FALSE) %>%
+dat <- read.csv("zika.anal.csv")
+dat <- dat %>%
     mutate(ELnew = EL-ER,
            ERnew = ER-ER,
            SLnew = SL-ER,
            SRnew = SR-ER,
-           VLnew = VL-ER,
-           VRnew = VR-ER,
-           ALnew = AL-ER,
-           ARnew = AR-ER)
+           VCLnew = VCL-ER,
+           VCRnew = VCR-ER,
+           ACLnew = ACL-ER,
+           ACRnew = ACR-ER)
 ```
 
 
@@ -37,30 +37,25 @@ In viral shedding data, it stands out that there are some really long (EL, ER) i
  - ID 868: in sequence shedding-no shedding-shedding outcomes
  
 ```{r, shedding-plot}
-p <- ggplot(dat, aes(y=factor(id))) + 
-    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(id)), 
+p <- ggplot(dat, aes(y=factor(UID))) + 
+    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
                  color="blue", size=2) +
-    geom_segment(aes(x=VLnew, xend=VRnew, yend=factor(id), 
-                     color=factor(SHEDDING)), size=2) +
-    scale_color_manual(values = c("green", "red", "gray")) +
+    geom_segment(aes(x=VCLnew, xend=VCRnew, yend=factor(UID)), 
+                 color="red", alpha=.5, size=2)  +
     ggtitle("Viral shedding data") + 
     xlab("time since last possible exposure") +
-    ylab("id") + theme(legend.position="bottom")
+    ylab("UID") + theme(legend.position="bottom")
 print(p)
-```
-
-Trimming the x-axis for zooming
-```{r}
-p + coord_cartesian(xlim = c(-10, 50))
 ```
 
 ## Plotting incubation period data
 
 ```{r, incper-plot}
-p <- ggplot(dat, aes(y=factor(id))) + 
-    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(id)), 
+p <- ggplot(dat, aes(y=factor(UID))) + 
+    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
                  color="blue", size=2) +
-    geom_segment(aes(x=SLnew, xend=SRnew, yend=factor(id)), size=2, color="red") +
+    geom_segment(aes(x=SLnew, xend=SRnew, yend=factor(UID)), 
+                 size=2, color="red", alpha=.5) +
     ggtitle("Incubation Period data") + 
     xlab("time since last possible exposure") +
     ylab("id")
@@ -77,19 +72,13 @@ p + coord_cartesian(xlim = c(-5, 10))
 What is up with ID 104? Why the long green tail?
 
 ```{r, antibody-plot}
-p <- ggplot(dat, aes(y=factor(id))) + 
-    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(id)), 
+p <- ggplot(dat, aes(y=factor(UID))) + 
+    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
                  color="blue", size=2) +
-    geom_segment(aes(x=ALnew, xend=ARnew, yend=factor(id), 
-                     color=factor(ANYANTIBODY)), size=2) +
-    scale_color_manual(values = c("green", "red")) +
+    geom_segment(aes(x=ACLnew, xend=ACRnew, yend=factor(UID)), 
+                     color="red", size=2, alpha=.5) +
     ggtitle("Antibody data") + 
     xlab("time since last possible exposure") +
-    ylab("id") + theme(legend.position="bottom")
+    ylab("id") 
 print(p)
-```
-
-Trimming the x-axis for zooming
-```{r}
-p + coord_cartesian(xlim = c(-10, 100))
 ```
