@@ -2,16 +2,16 @@
 title: "Zika Literature Review - Supplement"
 author: "Justin Lessler"
 date: "Monday, February 29, 2016"
-output: html_document
+output: word_document
 ---
 
 
-```{r}
+```{r, echo=FALSE}
 #Variables to make code work with the local environemnt
 
 
 ````
-# 1 Statistical Analysis
+# 1 Statistical Methods
 
 ## 1.1 Data cleaning 
 
@@ -47,8 +47,8 @@ To calculate the period of viral clearance from blood, definied as the last mome
     + *if no positive or equivoval test was reported:* the earliest possible time of exposure
 3. The latest possible time of viral clearance is:
     + *if negative and positive tests were reported:* the time of the first negative test following a positive test
-    + *if only negatve tests were reported:* the time of that negative test
-    + *if not negative tests were reported:* infinited/undefined
+    + *if only negatve tests were reported:* the time of the earliest negative test
+    + *if not negative tests were reported:* infinite/undefined
 
 
 
@@ -160,10 +160,24 @@ zika.anal[,c("EL","ER","SL","SR","VCL","VCR","ACL","ACR")] <-
 
 ```
 
-## 1.2 Statistical Analysis
+## 1.2 Bayesian MCMC Framework for Estimating Key Distributions
 
+Statistical analysis roughly follows methods previously used to estimate the incubation period (see Reich et al. 2009 and Lessler et. al 2009). Using the JAGS program and the R statstical language. 
 
-```{r, echo=FALSE}
+We treat the the time of infection for each individual, $E_i$ drawn form a uniform prior defined by the earliest and lates possible times of exposure ($EL_i$ and $ER_i$).
+$$E_i \sim Uniform(EL_i, ER_i)$$
+
+We then considered the length of the incubatoin period, $Y_{si}$, the time until viral clearance, $Y_{vi}$, and the time until seroconversion, $Y_{ai}$, to be interval censored random variables following a lognormal, weibull and weibull distribution repectively. That is:
+$$Y_{si} \in [SL_i-E_i, SR_i-E_i]; Y_{si} \sim LogNormal(lm, lsd)$$
+$$Y_{vi} \in [VL_i-E_i, VR_i-E_i]; Y_{vi} \sim Weibull(shape, scale)$$
+$$Y_{ai} \in [AL_i-E_i, AR_i-E_i]; Y_{ai} \sim Weibull(shape, scale)$$
+
+where $SL_i$ is the earliest possible time of symptom onset for case $i$, $SR_i$ is the latest time of symptom onset for case $i$, $VL_i$ and $VR_i$ similarly bounds viral clearance, and $SL_i$ and $SR_i$ bounds symptom onset. Any censoring bound that was less than 0 was replaved by a very small postive value $\epsilon$.
+
+In our results, the Weibull distribution is parameterized as in the R Statisistical Language, that is, if $a$=shape and $b$=scale, the probability distribution function is defined as:
+$$f(x) = \frac{a}{b}\left(\frac{x}{b}\right)^{a-1}e^{-x/b^a}$$
+
+```{r, echo=FALSE, warning=FALSE, results='hide', message=FALSE}
 
   #assuming observationsiwth no upper limite have NAs in the R slot. Currently only in VCR column
   zika.anal.jags <- zika.anal
@@ -232,7 +246,7 @@ zika.anal[,c("EL","ER","SL","SR","VCL","VCR","ACL","ACR")] <-
   #set the parameters we want to track
   parameters <- c("lm","lsd","v_v","scale_v","v_a","scale_a", "E")
 
-  set.seed(1456781173)
+  set.seed(12345) #if this is not included, multiple initializations maybe needed.
   #initialization function for jags
   jags.inits <-  function() {
     rc <-list(E=rep(0.0000000011,25), #start with a fixed E to avoid bad starting points
@@ -251,7 +265,7 @@ zika.anal[,c("EL","ER","SL","SR","VCL","VCR","ACL","ACR")] <-
   
 ```
 
-```{r, eval=FALSE}
+```{r, eval=FALSE, echo=FALSE}
 #not evaluated during knitting, run to get the next section to work
 #note, we deal with the burnin manually later.
 
@@ -273,17 +287,296 @@ ABC1=as.matrix(full.fit.LWW[[1]][,])
 ABC2=as.matrix(full.fit.LWW[[2]][,])
 ABC3=as.matrix(full.fit.LWW[[3]][,])
 
-ABC1=ABC1[2001:(iters/thin),]
-ABC2=ABC2[2001:(iters/thin),]
-ABC3=ABC3[2001:(iters/thin),]
+ABC1=ABC1[5001:(iters/thin),]
+ABC2=ABC2[5001:(iters/thin),]
+ABC3=ABC3[5001:(iters/thin),]
 
-full.fit.LWW <- rbind(ABC1,ABC2,ABC3)
-
-
-save(full.fit.LWW, file="..\full.fit.jags.LWW.RData")
+#recreate MCMC object for diagnostics
+full.fit.LWW<-list(as.mcmc(ABC1), as.mcmc(ABC2), as.mcmc(ABC3)) 
+chains.LWW <- rbind(ABC1,ABC2,ABC3)
+colnames(chains.LWW) <- varnames(full.fit.LWW[[1]])
+chains.LWW <- as.data.frame(chains.LWW)
+save(full.fit.LWW, chains.LWW, file="../full.fit.jags.LWW.RData")
 ```
 
-# 2 Blood Supply Safety
+
+We ran three serperate chains for 1,000,000 interations each, thinning to 1 in 50 samples. The first 5,000 of the 20,000 retained samples were discarded as burnin. Convergance was assessed by visual inspection and Gelman and Rubin's $\hat{R}$ statistic (CITE BROOKS AND GELMAN).
+
+**Table S1:** $\hat{R}$ statistic for primary results.
+```{r, echo=FALSE}
+load("../full.fit.jags.LWW.RData")
+print(gelman.diag(full.fit.LWW))
+```
+
+# 2. Estimates of key distributions.
 
 
-# 3 Model Checking and Sensitivity Analysis
+**Table S2**: Distribution of parameters and key quantiles of the incubation period for Zika virus infection.
+
+```{r, results='asis', echo=FALSE, message=FALSE}
+require(knitr)
+inc.fit.jags.LWW <- exp(c(median(chains.LWW$lm), quantile(chains.LWW$lm,prob=c(0.025,0.975))))
+inc.fit.jags.LWW <- rbind(inc.fit.jags.LWW,
+        exp(c(mean(chains.LWW$lsd), quantile(chains.LWW$lsd,prob=c(0.025,0.975)))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
+  tmp <- qlnorm(q, chains.LWW$lm, chains.LWW$lsd)
+  inc.fit.jags.LWW <- rbind(inc.fit.jags.LWW,
+                        c(mean(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+
+colnames(inc.fit.jags.LWW) <- c("est","CIlow","CIhigh")
+rownames(inc.fit.jags.LWW) <- c("median",
+                            "dispersion",
+                            "p5","p25","p50","p75","p95")
+
+
+kable(inc.fit.jags.LWW, format="markdown", digits=2)
+
+```
+
+
+**Table S3**: Weibull distribution parameters and key quantiles of the distribution of time to viral clearance for Zika virus infection.
+
+```{r, results='asis', echo=FALSE, message=FALSE}
+#in stan alpha = shape in R and beta = rate in R
+vshed.fit.jags.LWW <- c(median(chains.LWW$v_v), 
+                    quantile(chains.LWW$v_v,prob=c(0.025,0.975)))
+vshed.fit.jags.LWW <- rbind(vshed.fit.jags.LWW,
+        c(median(chains.LWW$scale_v), 
+          quantile(chains.LWW$scale_v,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95, 0.99)) {
+  tmp <- qweibull(q, chains.LWW$v_v, chains.LWW$scale_v)
+  vshed.fit.jags.LWW <- rbind(vshed.fit.jags.LWW,
+                        c(median(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+
+tmp <- chains.LWW$scale_v * gamma(1+1/chains.LWW$v_v)
+vshed.fit.jags.LWW <- rbind(quantile(tmp,prob=c(.5,.025,.975)),
+                           vshed.fit.jags.LWW)
+colnames(vshed.fit.jags.LWW) <- c("est","CIlow","CIhigh")
+rownames(vshed.fit.jags.LWW) <- c("mean",
+                            "shape",
+                            "scale",
+                            "p5","p25","p50","p75","p95","p99")
+
+
+
+kable(vshed.fit.jags.LWW, format="markdown", digits=2)
+
+```
+
+
+
+**Table S4**: Weibull distribution parameters and key quantiles of the distribution of time to seroconversion for Zika virus infection.
+
+```{r, results='asis', echo=FALSE, message=FALSE}
+#in stan alpha = shape in R and beta = rate in R
+sero.fit.jags.LWW <- c(median(chains.LWW$v_a), 
+                    quantile(chains.LWW$v_a,prob=c(0.025,0.975)))
+sero.fit.jags.LWW <- rbind(sero.fit.jags.LWW,
+        c(median(chains.LWW$scale_a), 
+          quantile(chains.LWW$scale_a,prob=c(0.025,0.975))))
+for (q in c(0.05, 0.25, 0.5, 0.75, 0.95, 0.99)) {
+  tmp <- qweibull(q, chains.LWW$v_a, chains.LWW$scale_a)
+  sero.fit.jags.LWW <- rbind(sero.fit.jags.LWW,
+                        c(median(tmp), quantile(tmp, prob=c(0.025, 0.975))))
+}
+
+
+tmp <- chains.LWW$scale_a * gamma(1+1/chains.LWW$v_a)
+sero.fit.jags.LWW <- rbind(quantile(tmp,prob=c(.5,.025,.975)),
+                           sero.fit.jags.LWW)
+colnames(sero.fit.jags.LWW) <- c("est","CIlow","CIhigh")
+rownames(sero.fit.jags.LWW) <- c("mean",
+                                 "shape",
+                                "scale",
+                              "p5","p25","p50","p75","p95","p99")
+
+
+kable(sero.fit.jags.LWW, format="markdown", digits=2)
+
+
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=2, fig.height=4}
+#Try to use ggplot to plot a beautiful display of the data. 
+
+#first make data frames to hold everything
+inc.curve <- NULL
+vc.curve <- NULL
+sero.curve<- NULL
+
+for (q in seq(0,30,.1)) {
+    tmp <- plnorm(q, chains.LWW$lm, chains.LWW$lsd)
+    tmp <- quantile(tmp, prob=c(0.025, .5, 0.975))
+    inc.curve <- rbind(inc.curve, c(q=q,
+                                    plow=tmp[1],
+                                    pmid=tmp[2],
+                                    phigh=tmp[3]))
+    
+    tmp <- 1-pweibull(q, chains.LWW$v_v, chains.LWW$scale_v)
+    tmp <- quantile(tmp, prob=c(0.025, .5, 0.975))
+    vc.curve <- rbind(vc.curve, c(q=q,
+                                  plow=tmp[1],
+                                  pmid=tmp[2],
+                                  phigh=tmp[3]))
+    
+    tmp <- pweibull(q, chains.LWW$v_a, chains.LWW$scale_a)
+    tmp <- quantile(tmp, prob=c(0.025, .5, 0.975))
+    sero.curve <- rbind(sero.curve, c(q=q,
+                                  plow=tmp[1],
+                                  pmid=tmp[2],
+                                  phigh=tmp[3]))
+}
+inc.curve <- as.data.frame(inc.curve)
+colnames(inc.curve) <- c("q","incplow","incpmid","incphigh")
+
+vc.curve <- as.data.frame(vc.curve)
+colnames(vc.curve) <- c("q","vcplow","vcpmid","vcphigh")
+
+sero.curve <- as.data.frame(sero.curve)
+colnames(sero.curve) <- c("q","scplow","scpmid","scphigh")
+
+
+require(ggplot2)
+
+
+inc.plt <- ggplot(inc.curve, aes(x=q)) +
+  geom_ribbon(aes(ymin=incplow, ymax=incphigh), fill="blue", alpha=.2) +
+  geom_line(aes(y=incpmid), col="blue") +theme_bw()+
+  scale_x_continuous(limits=c(0, 25), expand = c(0, 0)) + 
+  ylab("% w/ symptoms") + xlab("days")
+
+vc.plt <- ggplot(vc.curve, aes(x=q)) +
+  geom_ribbon(aes(ymin=vcplow, ymax=vcphigh), fill="red", alpha=.2) +
+  geom_line(aes(y=vcpmid), col="red") +theme_bw()+
+  scale_x_continuous(limits=c(0, 25), expand = c(0, 0)) + 
+  ylab("% w/ detectable virus") + xlab("days")
+
+sero.plt <- ggplot(sero.curve, aes(x=q)) +
+  geom_ribbon(aes(ymin=scplow, ymax=scphigh), fill="darkgreen", alpha=.2) +
+  geom_line(aes(y=scpmid), col="darkgreen")+theme_bw()+
+  scale_x_continuous(limits=c(0, 25), expand = c(0, 0)) + 
+   ylab("% w/ sero-positive") + xlab("days")
+
+
+require(gridExtra)
+grid.arrange(inc.plt, vc.plt, sero.plt, ncol=1)
+
+```
+
+**Figure S1:** Percent developing by a day t (top), percent with detectable virus in blood at day t (middle) and percent seroconverting by day t.
+
+
+# 3. Blood Supply Safety
+ 
+For a fixed daily incidence rate of Zika virus infection, $\lambda$, the expected probability of a person donating blood being infected if their was no screening (this includes allowing symptomatic people to donate blood) is:
+$$\mu_v \lambda$$
+where $\mu_v$ is the mean time until viral clearance and we assume that blood donations would be infectious from the moment a case is infected.
+
+We presume that 80% of those infected to Zika virus remain asymptomatic, and that those who do develop symptoms always do so before clearing th virus. Hence the reduction in the probablity of an infected blood donation that can be achieved by preventing those who currently or recently have had symptoms associated with Zika virus from donating blood is:
+$$\frac{0.8\mu_v + 0.2 \mu_s}{\mu_v}$$
+where $\mu_s$ is the mean incubation period. 
+
+To estimate the effect of a serological screening test, we make the simplifying assumption that the time to seroconversion and the time to viral clearance are independent, and calculate the mean time to clearing virus or seroconverting, $\mu_{vs}$ based on the area under the survival curves as:
+$$\mu_{vs} = \int_0^\infty (1-F(t))(1-G(t)) dt$$
+where $F(t)$ is the CDF for the Weibull distribution of time for viral clearance, and $G(t)$ is the CDF for the Weibull distribution for time to seroconversion. Hence the reduction in the probability of a infected blood donation by serological screening is:
+$$\frac{\mu_{vs}}{\mu_v}$$
+
+
+We applied these calculations to our derived distributions, calculating point estimates and 95% confidence intervals by calculating the estimate for each  sample from the posterior of the MCMC fit of key distributions, and taking the median and appropriate quantiles.
+
+**Table S5:**  Increase in risk of a Zika contaminated donation per 1 per 100,000 
+person day increase in Zika incidence.
+```{r, results='asis', echo=FALSE}
+
+#caclculate the virologic and symptom means and compare.
+mns <- data.frame(inc = exp(chains.LWW$lm + chains.LWW$lsd^2/2),
+                  viro = chains.LWW$scale_v*gamma(1+1/chains.LWW$v_v))
+
+relative.inc <- quantile((0.8*mns$viro + 0.2*mns$inc)/mns$viro, 
+                              prob=c(0.025, .5, 0.975))
+
+
+to.integrate <- function(t, v_v, scale_v, v_a, scale_a) {
+   rc <- (1-pweibull(t,v_v, scale_v)) *
+      (1-pweibull(t,v_a, scale_a))
+   return(rc)
+  }
+
+
+#mean survival time for serologic and virologic. 
+mns$sero.viro <- NA
+for (i in 1:length(chains.LWW$lm)) {
+  mns$sero.viro[i] <- 
+    integrate(to.integrate, 0,Inf, 
+              v_v= chains.LWW$v_v[i],
+              scale_v= chains.LWW$scale_v[i],
+              v_a= chains.LWW$v_a[i],
+              scale_a= chains.LWW$scale_a[i])$value
+  }
+
+relative.sero <- quantile(mns$sero.viro/mns$viro,
+                                  prob=c(0.025, .5, 0.975))
+
+
+tmp <- apply(mns, 2, quantile, prob=c(0.5, 0.025, 0.975))
+tmp <- tmp[,c("viro","inc","sero.viro")]
+screen.res <-data.frame(risk.per.100k=sprintf("%1.1f (%1.1f, %1.1f)",
+                                 tmp[1,],tmp[2,], tmp[3,]),
+           relativerisk=c("---",
+                           sprintf("%1.2f (%1.2f, %1.2f)", 
+                                    relative.inc[2], relative.inc[1], relative.inc[3]),
+                           sprintf("%1.2f (%1.2f, %1.2f)", 
+                                    relative.sero[2], relative.sero[1], relative.sero[3]))                    
+                          
+             )
+
+colnames(screen.res) <- c("Risk per 100,000 donations", "Relative Risk")
+rownames(screen.res) <- c("No Screening", "Symptom Based Screening", "Serological Screening")
+
+kable(screen.res, format="markdown", digits=2)
+
+```
+
+#4. Distribution of times to virus recovery in other specimens
+
+While we were unable to measure the distribution of time to virus no longer being recoverable in samples other than blood/sera (e.g., urine, saliva) due to insufficient data. However, we can examine the posterior distribution of the time from infection to collection of postive samples. Most tests of non-blood samples reported were for urine. For this reason and concerns about sexual transmission, we confine our analysis to these samples. 
+
+
+**Table S6:** Expected time from infection to collection of latest negative urine sample.
+```{r, echo=FALSE, results='asis'}
+zika.urine<- zika[which(zika$SAMPLE=="urine" & zika$SHEDDING==1),]
+
+#recenter VL to 0 from EL
+zika.urine$VL  <- zika.urine$VL - zika.urine$EL
+
+#simplify the data to just what we need...all of these war within a day
+zika.urine <- zika.urine[,c("UID","VL")]
+
+#make sure we have only the latest sample for each individual
+for (uid in unique(zika.urine$UID)) {
+  inds <- which(zika.urine$UID == uid)
+  zika.urine$VL[inds] <- max(zika.urine$VL[inds])
+}
+
+zika.urine <- unique(zika.urine)
+
+zika.urine$anal.ind <- -1
+zika.urine$TimeToTest <- -1
+
+#get the index in the analysis indices and calculate the time from exposure
+for (i in 1:nrow(zika.urine)) {
+  zika.urine$anal.ind[i] <- which(zika.anal$UID==zika.urine$UID[i])
+  tmp <- quantile(zika.urine$VL[i]-chains.LWW[,zika.urine$anal.ind[i]], prob=c(0.5,0.025,0.975))
+  zika.urine$TimeToTest[i] <- sprintf("%1.1f (%1.1f, %1.1f)",
+                                   tmp[1],tmp[2],tmp[3])
+}
+
+kable(zika.urine[,c("UID","TimeToTest")], format="markdown", digits=1, row.names=FALSE)
+```
+
+# 5. Model Checking and Sensitivity Analysis

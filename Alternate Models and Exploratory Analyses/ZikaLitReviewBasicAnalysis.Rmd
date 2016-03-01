@@ -1,9 +1,11 @@
 ---
-title: "Zika Analysis"
+title: "Exploratory Zika Analysis"
 author: "Justin Lessler"
 date: "Monday, February 22, 2016"
 output: word_document
 ---
+
+**DISCLAMER: This Exploratory original analysis is provided in the repository for completeness. There is no guarantee it will work with the final analytic data set, and it contains many intermediate analyses that did not pan out, of for which we did not ultimately have condidence in the results. It also will not knot efficiently.**
 
 Pooled analysis of data form the Zika systematic review.
 
@@ -68,15 +70,11 @@ inc.fit
 ```
 
 
-Based on the bootstrap analysis, assuming that the incubation period for Zika
-infection follows a log-normal diatribution, we estimate the mean incubation period to be 6.4 days (95% CI: 4.8-8.0). The dispersion is 1.36 (95% CI: 1.0-1.5). Hence 5% of cases will develop symptoms by 3.8 days after infection (95% CI: 2.9-8.0)and 95% by 10.6 days (95% CI: 7.2-13.1).
-
-
 
 ##Length of viral shedding
 
 
-XXXXXXXXXXNOT WORKINGXXXXXXXXXXXX
+
 ```{r}
 
 #first pass, restrict to blood (i.e., not saliva or uring)
@@ -122,8 +120,7 @@ for (uid in unique(zika.vshed.bl$UID)) {
 
   ####A BIT OF A DISASTER
   #now lets fit a gamma distribution to this data using MCMC
-  vshed.fit <- dic.fit(tmp, dist = "W", n.boots = 100,
-                       par1.int=c(1,10), par2.int=c(1, 100))
+  vshed.fit <- dic.fit(tmp, dist = "G", n.boots = 10000)
   
 
 ```
@@ -355,11 +352,11 @@ cat("Mean time to seroconversion=",
 
 Based on 4 chains, 50,000 interations per chain, assuming the incubtion period follows a log-normal distribution, and that the time to viral clearance an seroconversion both follow a weibull distributoin, we find that:
 
-The mean incubation period is 6.0 days (95% CI: 4.6-7.9) with a dispersion of 1.47 (95% CI: 1.24-1.94). 90% of cases will develop symptoms between 3.2 and 11.6 days of infection (95% CIs: 1.8-4.6 and 7.9-18.8).
+The median incubation period is 5.9 days (95% CI: 4.6-7.5) with a dispersion of 1.45 (95% CI: 1.23-1.91). 90% of cases will develop symptoms between 3.2 and 11.2 days of infection (95% CIs: 1.8-4.6 and 7.9-17.8).
 
-The mean time to viral clearanace is estimated to be 9.7 days (95% CI: 7.9-13.4), and  we expext 90% of people to clear virus between 3.3 and 18.5 days after infection (95% CIs: 0-5.6 and 12.3-37.2).
+The mean time to viral clearanace is estimated to be 9.8 days (95% CI: 7.7-13.4), and  we expext 90% of people to clear virus between 3.5 and 17.9 days after infection (95% CIs: 0.8-5.6 and 12.5-33.9).
 
-The mean time to seroconversion is 8.9 days (95% CI: 6.9-11.4), and we expect 90% of peopld to seroconvert between 3.9 and 14.3 days of infection (95% CIs: 1.6-5.4 and 11.0-19.8).
+The mean time to seroconversion is 9.1 days (95% CI: 7.0-11.1), and we expect 90% of peopld to seroconvert between 4.0 and 14.3 days of infection (95% CIs: 2.1-5.5 and 11.1-19.1).
 
 
 ```{r}
@@ -473,6 +470,41 @@ symptom.relative.sero
 ```
 
 
+#Single interval censored survreg analysis.
+
+Does a single interval censored analysis using survreg
+
+```{r}
+                   
+#do incunation period first.
+inc.low <- pmax(zika.anal$SL - zika.anal$ER, 0.01)
+inc.high <-zika.anal$SR - zika.anal$EL
+inc.surv <- Surv(inc.low, inc.high, event=rep(3, length(inc.high)),type="interval")
+
+inc.sr <- survreg(inc.surv~1, dist="lognormal")
+inc.sr
+confint(inc.sr)
+
+
+#do viral shedding
+v.low <-  pmax(zika.anal$VCL - zika.anal$ER, 0.01)
+v.high <-zika.anal$VCR - zika.anal$EL
+v.surv <- Surv(v.low, v.high, type="interval2")
+v.sr <- survreg(v.surv~1, dist="weibull", scale=1/vshed.fit.stan.LWW[1,1])
+v.sr
+confint(v.sr)
+
+#do serology
+s.low <-  pmax(zika.anal$ACL - zika.anal$ER, 0.01)
+s.high <-zika.anal$ACR - zika.anal$EL
+s.surv <- Surv(s.low, s.high, type="interval2")
+s.sr <- survreg(s.surv~1, dist="weibull", scale =1/sero.fit.stan.LWW[1,1])
+s.sr
+confint(s.sr)
+
+```
+
+
 #Combined stan analysis Lognomal for incubation period, Gamma for others
 
 ```{r, eval=FALSE}
@@ -548,7 +580,7 @@ full.fit.LGG <- stan("DistributionFitLGG.stan", data=stan.data,
                   init=stan.init.LGG,
                   iter=100, chains=4, thin=1)
 
-save(full.fit.LWW, file = "../FullFitLWW.RData")
+save(full.fit.LGG, file = "../FullFit.LGG.RData")
 
 ```
 
@@ -661,33 +693,6 @@ rownames(vshed.fit.stan) <- c("alpha (shape)",
 
 
 
-#Single interval censored survreg analysis.
-
-Does a single interval censored analysis using survreg
-
-```{r}
-                   
-#do incunation period first.
-inc.low <- pmax(zika.anal$SL - zika.anal$ER, 0.01)
-inc.high <-zika.anal$SR - zika.anal$EL
-inc.surv <- Surv(inc.low, inc.high, event=rep(3, length(inc.high)),type="interval")
-
-inc.sr <- survreg(inc.surv~1, dist="lognormal")
-
-
-#do viral shedding
-v.low <-  pmax(zika.anal$VCL - zika.anal$ER, 0.01)
-v.high <-zika.anal$VCR - zika.anal$EL
-v.surv <- Surv(v.low, v.high, type="interval2")
-v.sr <- survreg(v.surv~1, dist="weibull", scale=1/2.5)
-
-#do serology
-s.low <-  pmax(zika.anal$ACL - zika.anal$ER, 0.01)
-s.high <-zika.anal$ACR - zika.anal$EL
-s.surv <- Surv(s.low, s.high, type="interval2")
-s.sr <- survreg(s.surv~1, dist="weibull", scale =1/3.8)
-
-```
 
 #Appendix
 
@@ -951,6 +956,3 @@ rownames(vshed.fit.stanLL) <- c("meanlog",
 ```
 
 
-Based on 4 chains, 35,000 interations per chain, assiming that both the time to symptom onset and the time to viral clearance follow a log-normal distribution, we estimate that the mean incubation period is 6.2 days (95% CI: 4.8-8.1) with a dispersion of 1.49 (95% CI: 1.24-1.94). 90% of cases will develop symptoms between 3.3 and 12.3 days of infectoin (95% CIs: 1.9-4.8 and 8.0-20.5).
-
-The mean time to viral cleanace is estimated to be 7.1 days (95% CI: 1.8-12.3) with a dispersiont of 2.47 (95% CI: 1.30-16.1). We expext 90% of people to clear virus between 3 and 54 days after infection (95% CI: 0-7 and 12-280).
