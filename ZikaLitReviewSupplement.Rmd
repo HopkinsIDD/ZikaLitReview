@@ -67,7 +67,7 @@ references:
 
 ## 1.1 Data cleaning 
 
-All analytic data sets and code, including the R-markdown file used to generate this supplement, is available from https://github.com/HopkinsIDD/ZikaLitReview.git. 
+All analytic data sets and code, including the R-markdown file used to generate this supplement, is available from https://github.com/HopkinsIDD/ZikaLitReview. 
 
 Analytic data is available in the file ZikaLitReviewData.csv, which consists of one line per observation of a bounded time of symptom onset, virologic testing or serologic testing. The main analysis is based on all abstracted observations, minus those that were reports of perinatal transmission. 
 
@@ -219,7 +219,7 @@ Statistical analysis roughly follows methods previously used to estimate the inc
 We treat the time of infection for each individual, $E_i$ drawn from a uniform prior defined by the earliest and lates possible times of exposure ($EL_i$ and $ER_i$).
 $$E_i \sim Uniform(EL_i, ER_i)$$
 
-We then considered the length of the incubatoin period, $Y_{si}$, the time until viral clearance, $Y_{vi}$, and the time until seroconversion, $Y_{ai}$, to be interval censored random variables following a lognormal, Weibull and Weibull distribution respectively. That is:
+We then considered the length of the incubation period, $Y_{si}$, the time until viral clearance, $Y_{vi}$, and the time until seroconversion, $Y_{ai}$, to be interval censored random variables following a lognormal, Weibull and Weibull distribution respectively. That is:
 $$Y_{si} \in [SL_i-E_i, SR_i-E_i]; Y_{si} \sim LogNormal(lm, lsd)$$
 $$Y_{vi} \in [VL_i-E_i, VR_i-E_i]; Y_{vi} \sim Weibull(shape, scale)$$
 $$Y_{ai} \in [AL_i-E_i, AR_i-E_i]; Y_{ai} \sim Weibull(shape, scale)$$
@@ -839,6 +839,6 @@ kable(screen.res, format="markdown", digits=2)
 
 ## Alternate Fitting Mechanisms
 
-Alternate methods of fitting the model and distributions are avaiable on the GitHub repository. A spreadsheet comparing methods is available on the github repository. Key quantiles were robust across all methods and assumptions, and the viral sheddind distribution was the most sensitive to the selection of the fitting approach.
+Alternate methods of fitting the model and distributions and a spreadsheet comparing methods are available on the GitHub repository. Key quantiles were robust across all methods and assumptions, and the viral sheddind distribution was the most sensitive to the selection of the fitting approach.
 
 # References
