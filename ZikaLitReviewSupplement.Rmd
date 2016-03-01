@@ -212,6 +212,56 @@ zika.anal[,c("EL","ER","SL","SR","VCL","VCR","ACL","ACR")] <-
 
 ```
 
+### 1.1.3 Visualizing the interval-censored data
+```{r, echo=FALSE}
+library(dplyr)
+library(ggplot2)
+dat <- zika.anal %>%
+    mutate(ELnew = EL-ER,
+           ERnew = ER-ER,
+           SLnew = SL-ER,
+           SRnew = SR-ER,
+           VCLnew = VCL-ER,
+           VCRnew = VCR-ER,
+           ACLnew = ACL-ER,
+           ACRnew = ACR-ER)
+```
+```{r, shedding-plot, echo=FALSE}
+p <- ggplot(dat, aes(y=factor(UID))) + 
+    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
+                 color="blue", size=2) +
+    geom_segment(aes(x=VCLnew, xend=VCRnew, yend=factor(UID)), 
+                 color="red", alpha=.5, size=2)  +
+    ggtitle("Viral shedding data") + 
+    xlab("time since last possible exposure") +
+    ylab("UID") + theme(legend.position="bottom")
+print(p)
+```
+
+```{r, incper-plot, echo=FALSE}
+p <- ggplot(dat, aes(y=factor(UID))) + 
+    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
+                 color="blue", size=2) +
+    geom_segment(aes(x=SLnew, xend=SRnew, yend=factor(UID)), 
+                 size=2, color="red", alpha=.5) +
+    ggtitle("Incubation Period data") + 
+    xlab("time since last possible exposure") +
+    ylab("id")
+print(p)
+```
+
+```{r, antibody-plot, echo=FALSE}
+p <- ggplot(dat, aes(y=factor(UID))) + 
+    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
+                 color="blue", size=2) +
+    geom_segment(aes(x=ACLnew, xend=ACRnew, yend=factor(UID)), 
+                     color="red", size=2, alpha=.5) +
+    ggtitle("Antibody data") + 
+    xlab("time since last possible exposure") +
+    ylab("id") 
+print(p)
+```
+
 ## 1.2 Bayesian MCMC Framework for Estimating Key Distributions
 
 Statistical analysis roughly follows methods previously used to estimate the incubation period (see @reich2009, @lessler2009). Using the JAGS program and the R statstical language, we implemented and fit the statistical framwork described below.
