@@ -59,10 +59,16 @@ references:
 
 
 ```{r, echo=FALSE}
+#libraries 
+library(coda)
+````
+
+```{r, echo=FALSE}
 #Variables to make code work with the local environemnt
 
 
 ````
+
 # 1 Statistical Methods
 
 ## 1.1 Data cleaning 
@@ -213,9 +219,10 @@ zika.anal[,c("EL","ER","SL","SR","VCL","VCR","ACL","ACR")] <-
 ```
 
 ### 1.1.3 Visualizing the interval-censored data
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=7}
 library(dplyr)
 library(ggplot2)
+library(gridExtra)
 dat <- zika.anal %>%
     mutate(ELnew = EL-ER,
            ERnew = ER-ER,
@@ -225,42 +232,48 @@ dat <- zika.anal %>%
            VCRnew = VCR-ER,
            ACLnew = ACL-ER,
            ACRnew = ACR-ER)
-```
-```{r, shedding-plot, echo=FALSE}
-p <- ggplot(dat, aes(y=factor(UID))) + 
-    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
-                 color="blue", size=2) +
-    geom_segment(aes(x=VCLnew, xend=VCRnew, yend=factor(UID)), 
-                 color="red", alpha=.5, size=2)  +
-    ggtitle("Viral shedding data") + 
-    xlab("time since last possible exposure") +
-    ylab("UID") + theme(legend.position="bottom")
-print(p)
-```
 
-```{r, incper-plot, echo=FALSE}
-p <- ggplot(dat, aes(y=factor(UID))) + 
+IPplot <- ggplot(dat, aes(y=factor(UID))) + 
     geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
                  color="blue", size=2) +
     geom_segment(aes(x=SLnew, xend=SRnew, yend=factor(UID)), 
                  size=2, color="red", alpha=.5) +
-    ggtitle("Incubation Period data") + 
-    xlab("time since last possible exposure") +
-    ylab("id")
-print(p)
-```
+    #ggtitle("Incubation Period data") + 
+    xlab(NULL) +
+    ylab("UID") +
+    coord_cartesian(xlim = c(-40, 50)) +
+    theme(axis.text.y = element_text(size=8)) +
+    annotate("text", x=-28, y="900.1", label="Incubation Period")
 
-```{r, antibody-plot, echo=FALSE}
-p <- ggplot(dat, aes(y=factor(UID))) + 
+VCplot <- ggplot(dat, aes(y=factor(UID))) + 
+    geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
+                 color="blue", size=2) +
+    geom_segment(aes(x=VCLnew, xend=VCRnew, yend=factor(UID)), 
+                 color="red", alpha=.5, size=2)  +
+    #ggtitle("Viral shedding data") + 
+    xlab(NULL) +
+    ylab("UID") +
+    theme(axis.text.y = element_text(size=8)) +
+    coord_cartesian(xlim = c(-40, 50)) +
+    annotate("text", x=-28, y="900.1", label="Viral Clearance")
+
+ACplot <- ggplot(dat, aes(y=factor(UID))) + 
     geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
                  color="blue", size=2) +
     geom_segment(aes(x=ACLnew, xend=ACRnew, yend=factor(UID)), 
                      color="red", size=2, alpha=.5) +
-    ggtitle("Antibody data") + 
+    #ggtitle("Antibody data") + 
     xlab("time since last possible exposure") +
-    ylab("id") 
-print(p)
+    ylab("UID") +
+    theme(axis.text.y = element_text(size=8)) +
+    coord_cartesian(xlim = c(-40, 50)) +
+    annotate("text", x=-28, y="900.1", label="Seroconversion")
+
+grid.arrange(IPplot, VCplot, ACplot, ncol=1)
 ```
+
+**Figure S1:** The intervals observed for each indivdual. Blue intervals represent windows of possible exposure. Red intervals represent windows of time in which the outcome (symptom onset, viral clearance, seroconversion) could have occured.
+
 
 ## 1.2 Bayesian MCMC Framework for Estimating Key Distributions
 
@@ -543,7 +556,7 @@ sero.curve <- as.data.frame(sero.curve)
 colnames(sero.curve) <- c("q","scplow","scpmid","scphigh")
 
 
-require(ggplot2)
+#require(ggplot2)
 
 
 inc.plt <- ggplot(inc.curve, aes(x=q)) +
@@ -565,12 +578,12 @@ sero.plt <- ggplot(sero.curve, aes(x=q)) +
    ylab("% w/ sero-positive") + xlab("days")
 
 
-require(gridExtra)
+#require(gridExtra)
 grid.arrange(inc.plt, vc.plt, sero.plt, ncol=1)
 
 ```
 
-**Figure S1:** Percent developing symptoms by day t (top), percent with detectable virus in blood at day t (middle), and percent seroconverting by day t (bottom).
+**Figure S2:** Percent developing symptoms by day t (top), percent with detectable virus in blood at day t (middle), and percent seroconverting by day t (bottom).
 
 
 # 3. Blood Supply Safety
