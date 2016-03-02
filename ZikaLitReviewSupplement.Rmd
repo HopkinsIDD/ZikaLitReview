@@ -111,17 +111,17 @@ To calculate the period of viral clearance from blood, defined as the last momen
 
 
 ```{r, echo=FALSE, warning=FALSE}
-#first pass, restrict to blood (i.e., not saliva or uring)
+#first pass, restrict to blood (i.e., not saliva or urine)
 zika.vshed.bl <- zika.vshed[which(zika.vshed$SAMPLE.TYPE %in%c("serum","blood")),]
 
 #Go through and find the start of the latest period in which
-#someone tested seropositive and the end of the latest subsequent
-#period where they did not....these bound seroconversion
+#someone showed viral shedding and the start of the subsequent
+#period where they did not....these bound the possible time of viral clearance
 for (uid in unique(zika.vshed.bl$UID)) {
   inds <- which(zika.vshed.bl$UID==uid)
   tmp <- zika.vshed.bl[inds,] 
   
-  #taking greater than rqualt to 1 means we will treat equivocal results as 
+  #taking greater than or equal to 1 means we will treat equivocal results as 
   #positive
   low.time <- max(tmp$VL[tmp$SHEDDING>=1])
   
@@ -134,7 +134,7 @@ for (uid in unique(zika.vshed.bl$UID)) {
   zika.vshed.bl$VCR[inds] <- high.time
   }
 
-  #make the anlytic dataset
+  #make the analytic dataset
   vshed.bl.anal <- zika.vshed.bl[,c("UID","EL","ER","VCL","VCR")]
   vshed.bl.anal$type <- 0
   vshed.bl.anal <- unique(vshed.bl.anal) #one row per observation
@@ -204,7 +204,7 @@ sero.anal <- unique(sero.anal)
 #Merges evertying into a single dataset
 
 
-#Create a dataset with everythign lined up for passing into STAN
+#Create a dataset with everything lined up for passing into STAN
 zika.anal <- zika.inc[,c("UID","EL","ER","SL","SR")]
 zika.anal <- merge(zika.anal, vshed.bl.anal, all=TRUE)
 zika.anal$type <- 0 #we don't use this, but helps with the merge.
@@ -279,7 +279,7 @@ grid.arrange(IPplot, VCplot, ACplot, ncol=1)
 
 Statistical analysis roughly follows methods previously used to estimate the incubation period (see @reich2009, @lessler2009). Using the JAGS program and the R statstical language, we implemented and fit the statistical framwork described below.
 
-We treat the time of infection for each individual, $E_i$ drawn from a uniform prior defined by the earliest and lates possible times of exposure ($EL_i$ and $ER_i$).
+We treat the time of infection for each individual, $E_i$ as drawn from a uniform prior defined by the earliest and lates possible times of exposure ($EL_i$ and $ER_i$).
 $$E_i \sim Uniform(EL_i, ER_i)$$
 
 We then considered the length of the incubation period, $Y_{si}$, the time until viral clearance, $Y_{vi}$, and the time until seroconversion, $Y_{ai}$, to be interval censored random variables following a lognormal, Weibull and Weibull distribution respectively. That is:
@@ -415,7 +415,7 @@ save(full.fit.LWW, chains.LWW, file="../full.fit.jags.LWW.RData")
 ```
 
 
-We ran three serperate chains for 1,000,000 interations each, thinning to 1 in 50 samples. The first 5,000 of the 20,000 retained samples were discarded as burnin. Convergance was assessed by visual inspection and Gelman and Rubin's $\hat{R}$ statistic [@brooks1998].
+We ran three serperate chains for 1,000,000 iterations each, thinning to 1 in 50 samples. The first 5,000 of the 20,000 retained samples were discarded as burnin. Convergance was assessed by visual inspection and Gelman and Rubin's $\hat{R}$ statistic as well as the multivariate equivalent by Gelman and Brooks [@brooks1998].
 
 **Table S1:** $\hat{R}$ statistic for primary results.
 ```{r, echo=FALSE}
@@ -696,7 +696,7 @@ kable(zika.urine[,c("UID","TimeToTest")], format="markdown", digits=1, row.names
 
 # 5. Model Checking and Sensitivity Analysis
 
-We examined serveral other distributions and mechanisms for fitting models. Many (e.g., those assuming a gamma distribution for the viral clearance an seroconversion distributions) could not be fit. Here we compare the results from the most similar plausible model, assuming a log normal distribution for all parameter, with our main results. 
+We examined serveral other distributions and mechanisms for fitting models. Many (e.g., those assuming a gamma distribution for the viral clearance an seroconversion distributions) could not be fit. Here we compare the results from the most similar plausible model, assuming a log normal distribution for all times to events, with our main results. 
 
 ## Use of an Alternate Distribution
 ```{r, eval=FALSE, echo=FALSE}
