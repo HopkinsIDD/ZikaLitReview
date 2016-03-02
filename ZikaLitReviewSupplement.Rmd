@@ -58,7 +58,7 @@ references:
 ---
 
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, warning=FALSE,message=FALSE}
 #libraries 
 library(coda)
 ````
@@ -218,7 +218,7 @@ zika.anal[,c("EL","ER","SL","SR","VCL","VCR","ACL","ACR")] <-
 
 ```
 
-### 1.1.3 Visualizing the interval-censored data
+### 1.1.3 Visual summary of interval-censored data
 ```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=7}
 library(dplyr)
 library(ggplot2)
@@ -242,8 +242,8 @@ IPplot <- ggplot(dat, aes(y=factor(UID))) +
     xlab(NULL) +
     ylab("UID") +
     coord_cartesian(xlim = c(-40, 50)) +
-    theme(axis.text.y = element_text(size=8)) +
-    annotate("text", x=-28, y="900.1", label="Incubation Period")
+    theme(axis.text.y = element_text(size=6)) +
+    annotate("text", x=-35, y="900.1", label="A")
 
 VCplot <- ggplot(dat, aes(y=factor(UID))) + 
     geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
@@ -253,9 +253,9 @@ VCplot <- ggplot(dat, aes(y=factor(UID))) +
     #ggtitle("Viral shedding data") + 
     xlab(NULL) +
     ylab("UID") +
-    theme(axis.text.y = element_text(size=8)) +
+    theme(axis.text.y = element_text(size=6)) +
     coord_cartesian(xlim = c(-40, 50)) +
-    annotate("text", x=-28, y="900.1", label="Viral Clearance")
+    annotate("text", x=-35, y="900.1", label="B")
 
 ACplot <- ggplot(dat, aes(y=factor(UID))) + 
     geom_segment(aes(x=ELnew, xend=ERnew, yend=factor(UID)), 
@@ -265,14 +265,14 @@ ACplot <- ggplot(dat, aes(y=factor(UID))) +
     #ggtitle("Antibody data") + 
     xlab("time since last possible exposure") +
     ylab("UID") +
-    theme(axis.text.y = element_text(size=8)) +
+    theme(axis.text.y = element_text(size=6)) +
     coord_cartesian(xlim = c(-40, 50)) +
-    annotate("text", x=-28, y="900.1", label="Seroconversion")
+    annotate("text", x=-35, y="900.1", label="C")
 
 grid.arrange(IPplot, VCplot, ACplot, ncol=1)
 ```
 
-**Figure S1:** The intervals observed for each indivdual. Blue intervals represent windows of possible exposure. Red intervals represent windows of time in which the outcome (symptom onset, viral clearance, seroconversion) could have occured.
+**Figure S1:** The intervals observed for each indivdual. Blue intervals represent windows of possible exposure. Red intervals represent windows of possible time of **(A)** symptom onset, **(B)** viral clearance, or **(C)** seroconversion. Lack of a red interval indicates no data for that outcome for that observation.
 
 
 ## 1.2 Bayesian MCMC Framework for Estimating Key Distributions
@@ -283,9 +283,9 @@ We treat the time of infection for each individual, $E_i$ drawn from a uniform p
 $$E_i \sim Uniform(EL_i, ER_i)$$
 
 We then considered the length of the incubation period, $Y_{si}$, the time until viral clearance, $Y_{vi}$, and the time until seroconversion, $Y_{ai}$, to be interval censored random variables following a lognormal, Weibull and Weibull distribution respectively. That is:
-$$Y_{si} \in [SL_i-E_i, SR_i-E_i]; Y_{si} \sim LogNormal(lm, lsd)$$
-$$Y_{vi} \in [VL_i-E_i, VR_i-E_i]; Y_{vi} \sim Weibull(shape, scale)$$
-$$Y_{ai} \in [AL_i-E_i, AR_i-E_i]; Y_{ai} \sim Weibull(shape, scale)$$
+$$Y_{si}|E_i \in [SL_i-E_i, SR_i-E_i]; Y_{si} \sim LogNormal(lm, lsd)$$
+$$Y_{vi}|E_i \in [VL_i-E_i, VR_i-E_i]; Y_{vi} \sim Weibull(shape_v, scale_v)$$
+$$Y_{ai}|E_i \in [AL_i-E_i, AR_i-E_i]; Y_{ai} \sim Weibull(shape_a, scale_a)$$
 
 where $SL_i$ is the earliest possible time of symptom onset for case $i$, $SR_i$ is the latest time of symptom onset for case $i$, $VL_i$ and $VR_i$ similarly bounds viral clearance, and $AL_i$ and $AR_i$ bounds seroconversion. Any censoring bound that was less than 0 was replaced by a very small postive value $\epsilon$.
 
@@ -583,7 +583,7 @@ grid.arrange(inc.plt, vc.plt, sero.plt, ncol=1)
 
 ```
 
-**Figure S2:** Percent developing symptoms by day t (top), percent with detectable virus in blood at day t (middle), and percent seroconverting by day t (bottom).
+**Figure S2:** Percent of the population who eventually develop symptoms who do so by day t (top), percent with detectable virus in blood at day t (middle), and percent seroconverting by day t (bottom).
 
 
 # 3. Blood Supply Safety
