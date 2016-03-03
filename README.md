@@ -8,3 +8,5 @@ ZikaLiteReviewSupplement.Rmd contains all code necessary to recreate our analyse
 **NOTE:** Two chunks that run and save results of the JAGS models are set not to evaluate when the file is knit, 
 *these chunks must be run to successfully knit the file and recreate the analysis*. However, once they are run once they need not
 be run again unless something about the underlying models is changed.
+
+This project is licensed under the terms of the GNU GPL v3 license.
