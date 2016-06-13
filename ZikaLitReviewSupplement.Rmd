@@ -430,7 +430,9 @@ print(gelman.diag(full.fit.LWW))
 
 ```{r, results='asis', echo=FALSE, message=FALSE}
 require(knitr)
-inc.fit.jags.LWW <- exp(c(median(chains.LWW$lm), quantile(chains.LWW$lm,prob=c(0.025,0.975))))
+inc.fit.jags.LWW <-  quantile(exp(chains.LWW$lm+chains.LWW$lsd^2/2), prob=c(0.5,0.025,0.975))
+inc.fit.jags.LWW <- rbind(inc.fit.jags.LWW, 
+                         exp(c(median(chains.LWW$lm), quantile(chains.LWW$lm,prob=c(0.025,0.975)))))
 inc.fit.jags.LWW <- rbind(inc.fit.jags.LWW,
         exp(c(mean(chains.LWW$lsd), quantile(chains.LWW$lsd,prob=c(0.025,0.975)))))
 for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
@@ -441,7 +443,7 @@ for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
 
 
 colnames(inc.fit.jags.LWW) <- c("est","CIlow","CIhigh")
-rownames(inc.fit.jags.LWW) <- c("median",
+rownames(inc.fit.jags.LWW) <- c("mean","median",
                             "dispersion",
                             "p5","p25","p50","p75","p95")
 
@@ -609,10 +611,10 @@ person-day increase in Zika incidence.
 ```{r, results='asis', echo=FALSE}
 
 #caclculate the virologic and symptom means and compare.
-mns <- data.frame(inc = exp(chains.LWW$lm + chains.LWW$lsd^2/2),
+mns <- data.frame(inc = 0.2*exp(chains.LWW$lm + chains.LWW$lsd^2/2)+0.8* chains.LWW$scale_v*gamma(1+1/chains.LWW$v_v),
                   viro = chains.LWW$scale_v*gamma(1+1/chains.LWW$v_v))
 
-relative.inc <- quantile((0.8*mns$viro + 0.2*mns$inc)/mns$viro, 
+relative.inc <- quantile(mns$inc/mns$viro, 
                               prob=c(0.025, .5, 0.975))
 
 
@@ -696,7 +698,7 @@ kable(zika.urine[,c("UID","TimeToTest")], format="markdown", digits=1, row.names
 
 # 5. Model Checking and Sensitivity Analysis
 
-We examined serveral other distributions and mechanisms for fitting models. Many (e.g., those assuming a gamma distribution for the viral clearance an seroconversion distributions) could not be fit. Here we compare the results from the most similar plausible model, assuming a log normal distribution for all times to events, with our main results. 
+We examined several other distributions and mechanisms for fitting models. Many (e.g., those assuming a gamma distribution for the viral clearance an seroconversion distributions) could not be fit. Here we compare the results from the most similar plausible model, assuming a log normal distribution for all times to events, with our main results. Note that the distributions used in the main analysis were selected a priori to be log-normal for the incubation period, and gamma or Weibull for seroconversion and viral shedding (the former of which could not be successfully fit). Due to limited data and lack of qualitative differences, no formal comparison of fit was performed.
 
 ## Use of an Alternate Distribution
 ```{r, eval=FALSE, echo=FALSE}
@@ -772,7 +774,8 @@ save(full.fit.LLL, chains.LLL, file="../full.fit.jags.LLL.RData")
 ```{r, results='asis', echo=FALSE, message=FALSE}
 load("../full.fit.jags.LLL.RData")
 require(knitr)
-inc.fit.jags.LLL <- exp(c(median(chains.LLL$lm), quantile(chains.LLL$lm,prob=c(0.025,0.975))))
+inc.fit.jags.LLL <-  quantile(exp(chains.LLL$lm+chains.LLL$lsd^2/2), prob=c(0.5,0.025,0.975))
+inc.fit.jags.LLL <- rbind(inc.fit.jags.LLL,exp(c(median(chains.LLL$lm), quantile(chains.LLL$lm,prob=c(0.025,0.975)))))
 inc.fit.jags.LLL <- rbind(inc.fit.jags.LLL,
         exp(c(mean(chains.LLL$lsd), quantile(chains.LLL$lsd,prob=c(0.025,0.975)))))
 for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
@@ -783,7 +786,8 @@ for (q in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
 
 
 colnames(inc.fit.jags.LLL) <- c("est","CIlow","CIhigh")
-rownames(inc.fit.jags.LLL) <- c("median",
+rownames(inc.fit.jags.LLL) <- c("mean",
+                            "median",
                             "dispersion",
                             "p5","p25","p50","p75","p95")
 
@@ -798,7 +802,8 @@ kable(inc.fit.jags.LLL, format="markdown", digits=2)
 ```{r, results='asis', echo=FALSE, message=FALSE}
 
 require(knitr)
-vshed.fit.jags.LLL <- exp(c(median(chains.LLL$V_lm), quantile(chains.LLL$V_lm,prob=c(0.025,0.975))))
+vshed.fit.jags.LLL <-  quantile(exp(chains.LLL$V_lm+chains.LLL$V_lsd^2/2), prob=c(0.5,0.025,0.975))
+vshed.fit.jags.LLL <- rbind(vshed.fit.jags.LLL,exp(c(median(chains.LLL$V_lm), quantile(chains.LLL$V_lm,prob=c(0.025,0.975)))))
 vshed.fit.jags.LLL <- rbind(vshed.fit.jags.LLL,
         exp(c(mean(chains.LLL$V_lsd), quantile(chains.LLL$V_lsd,prob=c(0.025,0.975)))))
 for (q in c(0.05, 0.25, 0.5, 0.75, 0.95,0.99)) {
@@ -809,7 +814,8 @@ for (q in c(0.05, 0.25, 0.5, 0.75, 0.95,0.99)) {
 
 
 colnames(vshed.fit.jags.LLL) <- c("est","CIlow","CIhigh")
-rownames(vshed.fit.jags.LLL) <- c("median",
+rownames(vshed.fit.jags.LLL) <- c("mean",
+                            "median",
                             "dispersion",
                             "p5","p25","p50","p75","p95","p99")
 
@@ -820,13 +826,14 @@ kable(vshed.fit.jags.LLL, format="markdown", digits=2)
 
 
 
-**Table S8**: Lognormal distribution parameters and key quantiles of the distribution of time to seroconversion for Zika virus infection assuming all distributions are lognormal.
+**Table S9**: Lognormal distribution parameters and key quantiles of the distribution of time to seroconversion for Zika virus infection assuming all distributions are lognormal.
 
 
 ```{r, results='asis', echo=FALSE, message=FALSE}
 
 require(knitr)
-sero.fit.jags.LLL <- exp(c(median(chains.LLL$A_lm), quantile(chains.LLL$A_lm,prob=c(0.025,0.975))))
+sero.fit.jags.LLL <-  quantile(exp(chains.LLL$A_lm+chains.LLL$A_lsd^2/2), prob=c(0.5,0.025,0.975))
+sero.fit.jags.LLL <- rbind(sero.fit.jags.LLL,exp(c(median(chains.LLL$A_lm), quantile(chains.LLL$A_lm,prob=c(0.025,0.975)))))
 sero.fit.jags.LLL <- rbind(sero.fit.jags.LLL,
         exp(c(mean(chains.LLL$A_lsd), quantile(chains.LLL$A_lsd,prob=c(0.025,0.975)))))
 for (q in c(0.05, 0.25, 0.5, 0.75, 0.95,0.99)) {
@@ -837,7 +844,8 @@ for (q in c(0.05, 0.25, 0.5, 0.75, 0.95,0.99)) {
 
 
 colnames(sero.fit.jags.LLL) <- c("est","CIlow","CIhigh")
-rownames(sero.fit.jags.LLL) <- c("median",
+rownames(sero.fit.jags.LLL) <- c("mean",
+                            "median",
                             "dispersion",
                             "p5","p25","p50","p75","p95","p99")
 
@@ -847,15 +855,15 @@ kable(sero.fit.jags.LLL, format="markdown", digits=2)
 ```
 
 
-**Table S9:**  Increase in risk of a Zika contaminated donation for each 1 per 100,000 
+**Table S10:**  Increase in risk of a Zika contaminated donation for each 1 per 100,000 
 person-day increase in Zika incidence, assuming all lognormal distributions
 ```{r, results='asis', echo=FALSE}
 
 #caclculate the virologic and symptom means and compare.
-mns <- data.frame(inc = exp(chains.LLL$lm + chains.LLL$lsd^2/2),
+mns <- data.frame(inc = exp(chains.LLL$lm + chains.LLL$lsd^2/2)*.2 + exp(chains.LLL$V_lm + chains.LLL$V_lsd^2/2)*.8,
                   viro = exp(chains.LLL$V_lm + chains.LLL$V_lsd^2/2))
 
-relative.inc <- quantile((0.8*mns$viro + 0.2*mns$inc)/mns$viro, 
+relative.inc <- quantile(mns$inc/mns$viro, 
                               prob=c(0.025, .5, 0.975))
 
 
@@ -902,6 +910,6 @@ kable(screen.res, format="markdown", digits=2)
 
 ## Alternate Fitting Mechanisms
 
-Alternate methods of fitting the model and distributions and a spreadsheet comparing methods are available on the GitHub repository. Key quantiles were robust across all methods and assumptions, and the viral sheddind distribution was the most sensitive to the selection of the fitting approach.
+Alternate methods of fitting the model and distributions and a spreadsheet comparing methods are available on the GitHub repository. Key quantiles were robust across all methods and assumptions, and the viral shedding distribution was the most sensitive to the selection of the fitting approach.
 
 # References
